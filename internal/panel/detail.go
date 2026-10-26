@@ -29,7 +29,7 @@ func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 	m := in.Manifest()
 	snap := in.Snapshot()
 
-	ui.Scroll(c).Fill().Padding(14, 4, 14, 10).Gap(10).Children(func() {
+	ui.Scroll(c).Fill().Padding(CardGap, Gutter).Gap(CardGap).Children(func() {
 		if m.Combined {
 			a.combined(c, p, in, snap)
 		} else {
@@ -51,7 +51,7 @@ func (a *App) hero(c *ui.Context, p palette, in *app.Instance, snap core.Snapsho
 		return
 	}
 
-	card(c, p).Shrink(0).Padding(14, 12).Children(func() {
+	card(c, p).Shrink(0).Children(func() {
 		ui.Row(c).Gap(4).AlignItems(ui.Baseline).Children(func() {
 			label(c, p, primary.Label)
 			ui.Spacer(c)
@@ -79,7 +79,7 @@ func (a *App) combined(c *ui.Context, p palette, in *app.Instance, snap core.Sna
 		}
 	}
 
-	card(c, p).Shrink(0).Padding(15, 13).Gap(8).Children(func() {
+	card(c, p).Shrink(0).Children(func() {
 		// The device first: what the numbers below belong to.
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, deviceName(snap)).FontSize(13).Bold().NoWrap().MaxLines(1).Grow(1)
@@ -240,7 +240,7 @@ func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Rea
 	if r.Severity != core.SeverityNone {
 		valueColor = p.severityColor(r.Severity)
 	}
-	card(c, p).Padding(13, 11).Gap(2).MinHeight(96).Children(func() {
+	card(c, p).Gap(2).MinHeight(96).Children(func() {
 		// The label and the trend share the card's top row, the trend at its
 		// right, so the eye finds the shape of a value in the same place on
 		// every card.

@@ -8,6 +8,21 @@ import (
 	"seeall/internal/core"
 )
 
+// The panel's spacing is one scale, so that every edge on a page lines up with
+// the edges on the pages beside it: the title bar, the tabs, the cards and the
+// settings all start at the same gutter and end at the same one.
+const (
+	// Gutter is the room between the panel's edges and what it shows.
+	Gutter = 14
+	// CardGap is the room between two cards, and above and below a card.
+	CardGap = 10
+	// cardPadX and cardPadY are the room a card leaves inside itself.
+	cardPadX, cardPadY = 14, 12
+	// cardRadius rounds cards; controlRadius rounds the controls on them.
+	cardRadius    = 12
+	controlRadius = 8
+)
+
 // palette is SeeAll's look: one surface, one accent, and the three states
 // that the whole app uses for severity. It follows the desktop's light or
 // dark appearance, so the panel looks like part of the system.

@@ -64,9 +64,10 @@ func label(c *ui.Context, p palette, text string) ui.Element {
 	return ui.Text(c, text).FontSize(11).TextColor(p.TextMuted).NoWrap()
 }
 
-// card is the panel's surface with a faint outline.
+// card is the panel's surface with a faint outline, at the one padding and
+// radius every card on every page uses.
 func card(c *ui.Context, p palette) ui.Element {
-	return ui.Column(c).Padding(14).Gap(10).Radius(12).
+	return ui.Column(c).Padding(cardPadY, cardPadX).Gap(CardGap).Radius(cardRadius).
 		Background(p.Card).Border(1, p.CardBorder)
 }
 

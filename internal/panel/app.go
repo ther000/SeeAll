@@ -99,7 +99,9 @@ func (a *App) View(c *ui.Context) {
 // header is the title bar: what the panel is, and the refresh it offers from
 // any page.
 func (a *App) header(c *ui.Context, p palette) {
-	ui.Row(c).Shrink(0).Padding(14, 10).Gap(6).AlignItems(ui.Center).Children(func() {
+	// The logo and the page's cards share a left edge: the panel's gutter,
+	// which the cards' own padding then insets their text from.
+	ui.Row(c).Shrink(0).Padding(CardGap, Gutter).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Icon(c, iconLogo).FontSize(17).TextColor(p.Accent)
 		ui.Text(c, "SeeAll").FontSize(14).Bold().Grow(1)
 		if ui.Button(c, "").Label("刷新").Description("刷新全部").Tooltip("刷新全部（Ctrl+R）").Children(func() {
@@ -125,13 +127,13 @@ func (a *App) tabs(c *ui.Context, p palette, instances []*app.Instance) {
 	if len(items) == 0 {
 		return
 	}
-	ui.Row(c).Shrink(0).Padding(10, 2).Children(func() {
+	ui.Row(c).Shrink(0).Padding(0, Gutter, 0, Gutter).Children(func() {
 		tabs := ui.TabsBase(c, &a.tab, len(items))
 		// The settings are not a tab, so none of them is lit while they
 		// show: a lit tab would claim a page that is not on screen.
 		lit := a.Selected() != SettingsPage
 		clicked := -1
-		tabs.List.FillWidth().Gap(4).Children(func() {
+		tabs.List.FillWidth().Gap(CardGap / 2).Children(func() {
 			for i, in := range items {
 				tab := a.tabButton(c, p, tabs.Tab(i), lit && i == a.tab,
 					iconFor(in.Manifest().Icon), in.Name, in.Snapshot().Status)
@@ -158,7 +160,7 @@ func (a *App) tabs(c *ui.Context, p palette, instances []*app.Instance) {
 // the monitor behind it is fine, which the page cannot show for the tabs it is
 // not on.
 func (a *App) tabButton(c *ui.Context, p palette, tab ui.Element, on bool, icon *ui.SVG, name string, status core.Status) ui.Element {
-	tab.Grow(1).Basis(0).Justify(ui.Center).Padding(7, 8).Radius(8).
+	tab.Grow(1).Basis(0).Justify(ui.Center).Padding(7, 8).Radius(controlRadius).
 		Gap(5).AlignItems(ui.Center).FocusRing(false)
 	if on {
 		tab.Background(p.Card).Border(1, p.CardBorder)

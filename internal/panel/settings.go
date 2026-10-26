@@ -15,15 +15,11 @@ import (
 // settings is the panel's settings page: which monitors run, what each one
 // watches, and how the app itself behaves.
 func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
-	ui.Scroll(c).Fill().Padding(14, 4, 14, 10).Gap(10).Children(func() {
+	ui.Scroll(c).Fill().Padding(CardGap, Gutter).Gap(CardGap).Children(func() {
 		ui.Text(c, "设置").FontSize(13).Bold()
 		card(c, p).Children(func() {
 			label(c, p, "应用")
-			ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
-				ui.Column(c).Grow(1).Gap(1).Children(func() {
-					ui.Text(c, "开机自启").FontSize(12)
-					ui.Text(c, "登录后在托盘里待命").FontSize(11).TextColor(p.TextMuted)
-				})
+			controlRow(c, p, "开机自启", "登录后在托盘里待命", func() {
 				on := a.Host.StartAtLogin()
 				if ui.Switch(c, &on).Label("开机自启").Changed() {
 					if err := mygo.App.SetOpenAtLogin(on); err != nil {
@@ -34,12 +30,10 @@ func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
 				}
 			})
 			hline(c, p)
-			ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
-				ui.Column(c).Grow(1).Gap(1).Children(func() {
-					ui.Text(c, "通知").FontSize(12)
-					ui.Text(c, "电量低、状态异常时弹系统通知").FontSize(11).TextColor(p.TextMuted)
-				})
-				if ui.Button(c, "全部刷新").Clicked() {
+			controlRow(c, p, "通知", "电量低、状态异常时弹系统通知", func() {
+				if ui.Button(c, "").Label("全部刷新").Children(func() {
+					ui.Text(c, "全部刷新").FontSize(11).SingleLine()
+				}).Clicked() {
 					a.Host.Refresh()
 					c.Toast("已刷新全部监控项")
 				}
@@ -75,24 +69,26 @@ func (a *App) instanceCard(c *ui.Context, p palette, in *app.Instance) {
 			if confirming {
 				buttonLabel = "确认移除"
 			}
-			if ui.Button(c, "").Label(buttonLabel).Tooltip("移除这个监控项").Children(func() {
-				ui.Text(c, buttonLabel).FontSize(11).SingleLine()
-			}).Clicked() {
-				if confirming {
-					a.confirmRemove = ""
-					a.Host.Remove(in.ID)
-					for key := range a.drafts {
-						if strings.HasPrefix(key, in.ID+"/") {
-							delete(a.drafts, key)
+			ui.Row(c).Shrink(0).Children(func() {
+				if ui.Button(c, "").Label(buttonLabel).Tooltip("移除这个监控项").Children(func() {
+					ui.Text(c, buttonLabel).FontSize(11).SingleLine()
+				}).Clicked() {
+					if confirming {
+						a.confirmRemove = ""
+						a.Host.Remove(in.ID)
+						for key := range a.drafts {
+							if strings.HasPrefix(key, in.ID+"/") {
+								delete(a.drafts, key)
+							}
 						}
+						a.ensureSelection(a.Host.Instances())
+						a.SetSelected(a.Selected())
+						c.Toast("已移除 " + in.Name)
+					} else {
+						a.confirmRemove = in.ID
 					}
-					a.ensureSelection(a.Host.Instances())
-					a.SetSelected(a.Selected())
-					c.Toast("已移除 " + in.Name)
-				} else {
-					a.confirmRemove = in.ID
 				}
-			}
+			})
 		})
 
 		for _, def := range m.Settings {
@@ -132,34 +128,27 @@ func (a *App) commit(in *app.Instance, key, value string) {
 func (a *App) settingField(c *ui.Context, p palette, in *app.Instance, def plugin.Setting, drafts map[string]string) {
 	switch def.Type {
 	case plugin.SettingBool:
-		ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
-			ui.Column(c).Grow(1).Gap(0).Children(func() {
-				ui.Text(c, def.Label).FontSize(12)
-				if def.Description != "" {
-					ui.Text(c, def.Description).FontSize(11).TextColor(p.TextMuted).Wrap()
-				}
-			})
-			on := in.Settings().Bool(def.Key, def.Default == "true")
+		on := in.Settings().Bool(def.Key, def.Default == "true")
+		controlRow(c, p, def.Label, def.Description, func() {
 			if ui.Switch(c, &on).Label(def.Label).Changed() {
 				a.commit(in, def.Key, strconv.FormatBool(on))
 			}
 		})
 	case plugin.SettingChoice:
-		ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
-			ui.Text(c, def.Label).FontSize(12).Grow(1)
-			values := make([]string, 0, len(def.Options))
-			lookup := map[string]string{}
-			for _, o := range def.Options {
-				values = append(values, o.Label)
-				lookup[o.Label] = o.Value
+		values := make([]string, 0, len(def.Options))
+		lookup := map[string]string{}
+		for _, o := range def.Options {
+			values = append(values, o.Label)
+			lookup[o.Label] = o.Value
+		}
+		current := drafts[def.Key]
+		chosen := current
+		for _, o := range def.Options {
+			if o.Value == current {
+				chosen = o.Label
 			}
-			current := drafts[def.Key]
-			chosen := current
-			for _, o := range def.Options {
-				if o.Value == current {
-					chosen = o.Label
-				}
-			}
+		}
+		controlRow(c, p, def.Label, def.Description, func() {
 			if ui.Select(c, &chosen, values).Label(def.Label).Changed() {
 				a.commit(in, def.Key, lookup[chosen])
 			}
@@ -190,6 +179,21 @@ func (a *App) settingField(c *ui.Context, p palette, in *app.Instance, def plugi
 			}
 		})
 	}
+}
+
+// controlRow is one line of a settings card: what it is and what it does on
+// the left, its control on the right. The text grows and the control keeps its
+// own width, so every control on the page ends on the card's inner edge.
+func controlRow(c *ui.Context, p palette, title, detail string, control func()) {
+	ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
+		ui.Column(c).Grow(1).Gap(1).Children(func() {
+			ui.Text(c, title).FontSize(12)
+			if detail != "" {
+				ui.Text(c, detail).FontSize(11).TextColor(p.TextMuted)
+			}
+		})
+		ui.Row(c).Shrink(0).AlignItems(ui.Center).Children(control)
+	})
 }
 
 func parsesNumber(s string) bool {
