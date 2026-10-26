@@ -37,7 +37,7 @@ func TestSettingsStartsAtTheTop(t *testing.T) {
 
 	// The header's subtitle is unique to the page, unlike "设置", which the
 	// sidebar also has at its foot.
-	r, ok := tt.Find("5 个监控项 · 5 个插件")
+	r, ok := tt.Find("2 个监控项 · 2 个插件")
 	if !ok {
 		t.Fatalf("the settings header is missing: %v", tt.Texts())
 	}
@@ -72,19 +72,18 @@ func TestMonitorPageLeadsWithItsReading(t *testing.T) {
 // what the right side shows.
 func TestSidebarSelectionSwitchesPage(t *testing.T) {
 	h, p := fixture(t)
-	p.SetSelected("mouse")
-	tt := ui.NewTester(p.View, 380, 470)
-
 	if len(h.Instances()) < 2 {
 		t.Skip("needs at least two built-in monitors")
 	}
-	// "键盘" is both a monitor and nothing else: the section titles are
-	// "设备", "本机", "服务" and "Agent".
-	if err := tt.Click("键盘"); err != nil {
+	// The row to click shows "鼠标", which the other page does not show, so
+	// the click cannot land on a section title with that name.
+	p.SetSelected("system")
+	tt := ui.NewTester(p.View, 380, 470)
+	if err := tt.Click("鼠标"); err != nil {
 		t.Fatal(err)
 	}
-	if p.Selected() != "keyboard" {
-		t.Fatalf("selected %q, want keyboard", p.Selected())
+	if p.Selected() != "mouse" {
+		t.Fatalf("selected %q, want mouse", p.Selected())
 	}
 }
 

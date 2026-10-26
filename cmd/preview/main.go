@@ -50,8 +50,6 @@ func main() {
 	}{
 		{"panel-mouse", "mouse"},
 		{"panel-system", "system"},
-		{"panel-server", "server:example.com"},
-		{"panel-agent", "agent"},
 		{"panel-settings", panel.SettingsPage},
 	}
 	for _, shot := range shots {
@@ -109,17 +107,6 @@ func fixture(size panel.Metrics) (*app.Host, *panel.App) {
 		},
 	}, map[string][]float64{"battery": wave(72, 40, 8, 3)})
 
-	inject("keyboard", core.Snapshot{
-		At: now.Add(-9 * time.Second), Status: core.StatusWarn,
-		Title: "Rapoo Gaming Device", Subtitle: "24% · 该充电了", Primary: "battery",
-		Readings: []core.Reading{
-			{ID: "battery", Label: "电量", Value: 24, Unit: core.UnitPercent,
-				Severity: core.SeverityWarn, Detail: "9 秒前"},
-			{ID: "source", Label: "来源", Text: "电池字段", Severity: core.SeverityNone,
-				Detail: "Rapoo Gaming Device"},
-		},
-	}, nil)
-
 	inject("system", core.Snapshot{
 		At: now.Add(-1 * time.Second), Status: core.StatusOK,
 		Title: "DESKTOP-4K1", Subtitle: "Windows · windows/amd64", Primary: "cpu",
@@ -135,35 +122,6 @@ func fixture(size panel.Metrics) (*app.Host, *panel.App) {
 			{ID: "uptime", Label: "开机", Text: "2.4 h", Severity: core.SeverityNone},
 		},
 	}, map[string][]float64{"cpu": wave(23, 18, 9, 6), "mem": wave(61, 18, 4, 11)})
-
-	inject("server:example.com", core.Snapshot{
-		At: now.Add(-4 * time.Second), Status: core.StatusOK,
-		Title: "example.com", Subtitle: "example.com", Primary: "latency",
-		Readings: []core.Reading{
-			{ID: "status", Label: "状态码", Value: 200, Severity: core.SeverityOK},
-			{ID: "latency", Label: "延迟", Value: 142, Unit: core.UnitMillis,
-				Severity: core.SeverityOK, Detail: "延迟平稳"},
-			{ID: "cert", Label: "证书", Value: 68, Unit: core.UnitDay, Severity: core.SeverityOK,
-				Detail: "到期前"},
-			{ID: "uptime", Label: "上次成功", Text: "刚好", Severity: core.SeverityNone},
-		},
-	}, map[string][]float64{"latency": wave(142, 24, 40, 5)})
-
-	inject("agent", core.Snapshot{
-		At: now.Add(-1 * time.Second), Status: core.StatusOK,
-		Title: "Agent", Subtitle: "Claude Code · Codex", Primary: "count",
-		Readings: []core.Reading{
-			{ID: "count", Label: "运行中", Value: 3, Severity: core.SeverityOK},
-			{ID: "busy", Label: "在计算", Value: 2, Severity: core.SeverityNone,
-				Detail: "刚用掉 CPU 就算"},
-			{ID: "agent-1", Label: "Claude Code", Text: "claude --resume",
-				Severity: core.SeverityNone, Detail: "PID 8124 · 42 分钟前"},
-			{ID: "agent-2", Label: "Codex", Text: "codex exec",
-				Severity: core.SeverityNone, Detail: "PID 9032 · 6 分钟前"},
-			{ID: "cpu", Label: "占用 CPU", Value: 1.8, Unit: core.UnitSeconds,
-				Severity: core.SeverityNone, Detail: "最近一次采样"},
-		},
-	}, map[string][]float64{"cpu": wave(1.8, 12, 1.2, 9)})
 
 	p := panel.New(host)
 	p.SetSize(size)

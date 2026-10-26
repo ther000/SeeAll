@@ -242,8 +242,8 @@ type Snapshot struct {
 	Status Status
 	// Readings are the values, in the order the page shows them.
 	Readings []Reading
-	// Title is the name of what is being watched right now: the mouse's
-	// name, the server's host.
+	// Title is the name of what is being watched right now, as the
+	// hardware reports it.
 	Title string
 	// Subtitle explains the title or the state: "2.4G · 90%".
 	Subtitle string

@@ -157,10 +157,8 @@ func (a *App) sidebar(c *ui.Context, p palette, instances []*app.Instance) {
 // sidebar does not jump as snapshots arrive.
 func (a *App) sorted(instances []*app.Instance) []*app.Instance {
 	order := map[plugin.Kind]int{
-		plugin.KindDevice:  0,
-		plugin.KindSystem:  1,
-		plugin.KindNetwork: 2,
-		plugin.KindAgent:   3,
+		plugin.KindDevice: 0,
+		plugin.KindSystem: 1,
 	}
 	out := append([]*app.Instance(nil), instances...)
 	sort.SliceStable(out, func(i, j int) bool {

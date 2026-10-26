@@ -39,7 +39,7 @@ func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
 			ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
 				ui.Column(c).Grow(1).Gap(1).Children(func() {
 					ui.Text(c, "通知").FontSize(12)
-					ui.Text(c, "电量低、服务掉线时弹系统通知").FontSize(11).TextColor(p.TextMuted)
+					ui.Text(c, "电量低、状态异常时弹系统通知").FontSize(11).TextColor(p.TextMuted)
 				})
 				if ui.Button(c, "全部刷新").Clicked() {
 					a.Host.Refresh()
@@ -195,8 +195,8 @@ func parsesNumber(s string) bool {
 	return err == nil
 }
 
-// addCard adds another instance of a plugin that takes several, as servers
-// do.
+// addCard adds another instance of a plugin that takes several, as a plugin
+// with one monitor per host would.
 func (a *App) addCard(c *ui.Context, p palette) {
 	multi := make([]plugin.Plugin, 0, 2)
 	for _, pl := range a.Host.Plugins() {
@@ -238,7 +238,7 @@ func (a *App) addCard(c *ui.Context, p palette) {
 				}
 			}
 		})
-		ui.Text(c, "服务器这类插件可以加多个，每个一个地址。").FontSize(11).TextColor(p.TextMuted).Wrap()
+		ui.Text(c, "这类插件可以加多个，每个监控一个对象。").FontSize(11).TextColor(p.TextMuted).Wrap()
 	})
 }
 

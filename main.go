@@ -1,7 +1,6 @@
-// SeeAll is a tray app that watches everything: the mouse on the desk, the
-// keyboard beside it, the computer it runs on, the servers it talks to and
-// the agents working on this machine. Each kind of thing is a plugin; the
-// panel is the same panel for all of them.
+// SeeAll is a tray app that watches everything: the mouse on the desk and
+// the computer it runs on, with room for anything else. Each kind of thing is
+// a plugin; the panel is the same panel for all of them.
 //
 //	go run .
 package main

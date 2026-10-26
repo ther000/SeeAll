@@ -1,6 +1,6 @@
 # SeeAll
 
-托盘里的小面板，用来监视**万物**：鼠标和键盘的电量、本机 CPU 与内存、你盯着的服务器、这台机器上跑着的 AI 编码代理。
+托盘里的小面板，用来监视**万物**：现在自带鼠标电量和本机状态，多一种监控对象只是多一个插件。
 
 用 [MyGo](https://mygo.egoist.dev/) 重写，原生 UI 直接画在 GPU 上：没有 webview、没有前端构建，一个 Go 二进制。
 
@@ -13,15 +13,12 @@
 新增一种「可以监视的东西」= 写一个实现 `plugin.Plugin` 的包，放进 `internal/app/builtin.go` 的切片里。
 列表、设置页、持久化、托盘、通知全都会自动出现，不需要改 UI。
 
-自带五个插件：
+自带两个插件：
 
 | 插件 | 监视什么 | 状态 |
 | --- | --- | --- |
 | 鼠标 | 雷柏 2.4G 鼠标的电量、连接方式、DPI（读状态广播帧） | 已在真实硬件上验证 |
-| 键盘 | 无线键盘电量：HID 电池字段，或雷柏状态帧 | 实验，协议已实现但未对着硬件验证 |
 | 本机 | CPU、内存、磁盘剩余、电池、开机时长 | 可用 |
-| 服务器 | HTTP 状态码、延迟趋势、证书剩余天数、连续失败次数 | 可用，可加多个 |
-| Agent | 本机在跑的 AI 编码代理：数量、活动、运行时长 | 可用（只读进程表） |
 
 ## 用法
 
@@ -81,10 +78,7 @@ internal/core/              读数模型：Reading / Snapshot / Severity / 环�
 internal/plugin/            插件契约：Plugin / Instance / Manifest / Env / Settings
 internal/hid/               Windows HID 枚举与只读接收（无 cgo）；其他平台是空实现
 internal/plugins/mouse/     雷柏 2.4G 协议（frame.go 里有逐字节的帧格式）
-internal/plugins/keyboard/  键盘电量
 internal/plugins/system/    CPU / 内存 / 磁盘 / 电池 / 开机时长
-internal/plugins/server/    HTTP 探活
-internal/plugins/agent/     代理进程发现
 internal/app/               宿主：设置落盘、实例生命周期、通知
 internal/panel/             面板视图（原生 UI，Go 写）
 internal/tray/              托盘图标与面板定位
@@ -134,6 +128,4 @@ go test ./...
 ## 已知边界
 
 - **雷柏接收器没有读回通道**：除状态帧里的 DPI，写进去的参数没法确认。SeeAll 这一版只读不写，不显示任何「你以为写进去了」的状态。
-- 键盘插件标着「实验」：两条读取路径都实现了，但没对着真实键盘验证过。
-- HID 读取目前只有 Windows 实现；其他平台能编译，设备类插件会报告没有通道。
-- Agent 插件只读进程表，不读对话内容和文件。
+- HID 读取目前只有 Windows 实现；其他平台能编译，鼠标插件会报告没有通道。

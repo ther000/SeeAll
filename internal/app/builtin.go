@@ -2,10 +2,7 @@ package app
 
 import (
 	"seeall/internal/plugin"
-	"seeall/internal/plugins/agent"
-	"seeall/internal/plugins/keyboard"
 	"seeall/internal/plugins/mouse"
-	"seeall/internal/plugins/server"
 	"seeall/internal/plugins/system"
 )
 
@@ -18,9 +15,6 @@ import (
 func Builtin() []plugin.Plugin {
 	return []plugin.Plugin{
 		mouse.Plugin{},
-		keyboard.Plugin{},
 		system.Plugin{},
-		server.Plugin{},
-		agent.Plugin{},
 	}
 }

@@ -10,9 +10,8 @@ import (
 	"seeall/internal/core"
 )
 
-// maxTiles caps the readings a page shows as tiles. A monitor reporting a
-// dozen of them, as the agent plugin can, would push the page past the
-// window.
+// maxTiles caps the readings a page shows as tiles. A plugin reporting a
+// dozen of them would push the page past the window.
 const maxTiles = 6
 
 // detail is a monitor's page, laid out as a dashboard: the value that
@@ -226,14 +225,10 @@ func historyWindow(in *app.Instance, readingID string) string {
 // intervalSeconds is how often an instance polls, for the history label.
 func intervalSeconds(in *app.Instance) int {
 	switch in.Manifest().ID {
-	case "mouse", "keyboard":
+	case "mouse":
 		return 3
 	case "system":
 		return 2
-	case "server":
-		return in.Settings().Int("interval", 15)
-	case "agent":
-		return 3
 	}
 	return 5
 }

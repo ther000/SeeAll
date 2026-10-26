@@ -20,7 +20,7 @@ func TestFitFitsEveryPage(t *testing.T) {
 	}
 	for _, size := range sizes {
 		m := Fit(size.workW, size.workH)
-		for _, row := range []string{"mouse", "system", "server:example.com", "agent"} {
+		for _, row := range []string{"mouse", "system"} {
 			h, _ := fixture(t)
 			p := New(h)
 			p.SetSize(m)

@@ -16,10 +16,9 @@ import (
 	"seeall/internal/plugin"
 )
 
-// Instance is one running monitor the app keeps: the mouse, a server, the
-// system.
+// Instance is one running monitor the app keeps: the mouse, the system.
 type Instance struct {
-	// ID is unique across the app: "mouse", "server:github.com".
+	// ID is unique across the app: "mouse", "system".
 	ID string
 	// PluginID names the plugin that made it.
 	PluginID string
@@ -373,7 +372,7 @@ func readingRank(r core.Reading) int {
 func Kinds(instances []*Instance) []plugin.Kind {
 	seen := map[plugin.Kind]bool{}
 	var out []plugin.Kind
-	for _, order := range []plugin.Kind{plugin.KindDevice, plugin.KindSystem, plugin.KindNetwork, plugin.KindAgent} {
+	for _, order := range []plugin.Kind{plugin.KindDevice, plugin.KindSystem} {
 		for _, in := range instances {
 			if in.Manifest().Kind == order && !seen[order] {
 				seen[order] = true

@@ -13,7 +13,7 @@ SeeAll 是「鼠标电量显示」的完全重写：同一个托盘小工具，�
 ```
 core    ← 与插件无关的读数模型（Reading / Snapshot / Status / Severity / Ring / 单位格式化）
 plugin  ← 插件契约（Plugin / Instance / Manifest / Env / Settings），只依赖 core
-plugins/* ← 五个具体插件，依赖 core + plugin + hid（需要时）
+plugins/* ← 具体插件（mouse、system），依赖 core + plugin + hid（需要时）
 app     ← 宿主：加载/保存设置、创建与停止实例、快照与历史、通知，只依赖 core + plugin + plugins
 panel   ← 视图，依赖 app + core + plugin + mygo/ui
 tray    ← 图标绘制与面板定位，只依赖 mygo（无 UI 依赖）
@@ -41,7 +41,7 @@ type Instance interface {
 `Context()` 在 Stop 时被取消、`Notify()` 弹系统通知、`Logf()` 写日志。
 插件不碰 UI、不碰文件路径、不管生命周期。
 
-`Manifest` 声明：ID、显示名、一句话说明、分组（设备/本机/服务/Agent）、图标、
+`Manifest` 声明：ID、显示名、一句话说明、分组（设备/本机）、图标、
 设置字段（`Setting{Key,Label,Type,Default,...}`）、能否多实例、默认实例名、是否实验状态。
 
 设置页完全由 `Manifest.Settings` 生成：加一个字段就多一个控件，UI 代码不用动。
@@ -82,8 +82,8 @@ type Reading struct {
 }
 ```
 
-`Snapshot.Primary` 指定「这页的大数字用哪项」——电量页要环、CPU 页要百分比、
-服务页要延迟、Agent 页要数量。不指定就退化成「最严重的那项」。
+`Snapshot.Primary` 指定「这页的大数字用哪项」——电量页要环、CPU 页要百分比。
+不指定就退化成「最严重的那项」。
 
 ## 面板
 
@@ -105,7 +105,7 @@ Sidebar = 184  // 面板窄于 660 时按比例缩到 128
 - 详情页是仪表盘：主读数一张大卡（环 + 趋势折线），其余读数两张一行的小卡（`ui.Grid`），页脚钉在底部。
 - 设置页：应用级开关 + 每个实例一张卡（设置字段 + 移除）+ 添加卡片。
 
-`internal/panel/fit_test.go` 把四个监控页按「桌面」和「笔记本」两种工作区尺寸各渲染一遍，
+`internal/panel/fit_test.go` 把两个监控页按「桌面」和「笔记本」两种工作区尺寸各渲染一遍，
 断言页脚没被裁掉——这是唯一能自动发现「内容撑破固定高度」的手段，因为失败方式是画面被切，
 数值上全绿。
 
@@ -137,12 +137,11 @@ Sidebar = 184  // 面板窄于 660 时按比例缩到 128
 
 - 雷柏接收器**没有读回通道**：除状态帧里的 DPI，写进去的参数无法确认。
   SeeAll 这一版只读不写，不做「你以为写进去了」的显示。
-- 键盘插件标着「实验」：HID 电池字段与雷柏帧两条路都实现了，但没实测硬件。
-- HID 读取只有 Windows 实现，其他平台编译通过但设备插件报没有通道。
-- Agent 插件只读进程表，不读对话内容、不读文件。
+- HID 读取只有 Windows 实现，其他平台编译通过但鼠标插件报没有通道。
+- 自带只有鼠标和本机两个插件：插件化是给后续监控对象留的口子，不是一次塞满托盘。
 
 ## 验证过的事
 
 - `go run ./cmd/diag -capture` 在本机雷柏接收器上收到 `BB B0 42 B0 04 01 5F` 帧，
   解析出 95% / 1200 DPI / 无线，与老 .NET 版的抓包结果一致。
-- 面板在真实窗口里跑起来（`PrintWindow` 截图），深色主题下五个页面都正常渲染。
+- 面板在真实窗口里跑起来（`PrintWindow` 截图），深色主题下各页面都正常渲染。

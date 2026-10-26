@@ -1,9 +1,9 @@
 // Package plugin defines what a SeeAll plugin is and how the app runs it.
 //
 // A plugin is a Go package that declares a manifest and makes instances: a
-// monitor of one thing, such as a mouse's battery or a server's health.
-// SeeAll ships five of them (mouse, keyboard, system, server, agent), and a
-// new one only has to implement these interfaces to show up in the app.
+// monitor of one thing, such as a mouse's battery or the load on this
+// computer. SeeAll ships two of them (mouse, system), and a new one only has
+// to implement these interfaces to show up in the app.
 package plugin
 
 import (
@@ -18,7 +18,7 @@ import (
 type Kind string
 
 const (
-	// KindDevice watches hardware the user carries: mice, keyboards.
+	// KindDevice watches hardware the user carries: mice, dongles.
 	KindDevice Kind = "device"
 	// KindSystem watches the computer SeeAll runs on.
 	KindSystem Kind = "system"
@@ -57,11 +57,11 @@ type Manifest struct {
 	Icon string
 	// Settings are the fields the settings page offers for an instance.
 	Settings []Setting
-	// Multiple lets a plugin have several instances, as a server monitor
-	// has one per host. Without it, the app keeps a single instance.
+	// Multiple lets a plugin have several instances, one per thing it
+	// watches. Without it, the app keeps a single instance.
 	Multiple bool
 	// DefaultInstance is the name of the instance every install starts
-	// with: "鼠标", "本机", "github.com".
+	// with: "鼠标", "本机".
 	DefaultInstance string
 	// Interval is how often the host polls the instance; zero means the
 	// plugin's own timer drives it.
@@ -80,7 +80,7 @@ type Plugin interface {
 	New(env *Env) Instance
 }
 
-// Instance is one monitor the app runs: the mouse, a server, the system.
+// Instance is one monitor the app runs: the mouse, the system.
 type Instance interface {
 	// Start begins watching. It returns at once and keeps working in
 	// goroutines until Stop, reporting through Env.
