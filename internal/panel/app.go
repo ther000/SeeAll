@@ -29,8 +29,6 @@ type App struct {
 	drafts map[string]string
 	// confirmRemove is the instance whose remove button was pressed once.
 	confirmRemove string
-	// expanded lists the monitors whose remaining readings are shown.
-	expanded map[string]bool
 }
 
 // New makes the panel's state.
@@ -39,7 +37,6 @@ func New(host *app.Host) *App {
 		Host:     host,
 		selected: host.LastInstance(),
 		drafts:   map[string]string{},
-		expanded: map[string]bool{},
 		Size:     Fit(1920, 1040, 1),
 	}
 }

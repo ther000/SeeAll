@@ -13,7 +13,6 @@ const (
 	refreshSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6"/><path d="M20 4v7h-7"/></svg>`
 	plusSVG    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`
 	closeSVG   = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`
-	chevronSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`
 )
 
 var (
@@ -24,7 +23,6 @@ var (
 	iconRefresh = ui.MustParseSVG([]byte(refreshSVG))
 	iconPlus    = ui.MustParseSVG([]byte(plusSVG))
 	iconClose   = ui.MustParseSVG([]byte(closeSVG))
-	iconChevron = ui.MustParseSVG([]byte(chevronSVG))
 )
 
 // iconFor maps a manifest's icon name to the SVG it means.

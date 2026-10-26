@@ -10,13 +10,12 @@ import (
 	"seeall/internal/core"
 )
 
-// maxRows is how many readings a page lists before it folds the rest behind
-// a "显示其余 N 个" row, as a list that fills the panel would otherwise push
-// past its foot.
-const maxRows = 4
+// cardsPerRow is how many reading cards the page puts side by side: two fit
+// the panel at its narrowest, wide enough for a number and its unit.
+const cardsPerRow = 2
 
-// detail is a monitor's page: the reading that matters in a card at the top,
-// and every other reading below it as a row of one list.
+// detail is a monitor's page: the reading that matters in the hero card at the
+// top, and every other reading as a card of its own under it.
 func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 	m := in.Manifest()
 	snap := in.Snapshot()
@@ -104,8 +103,9 @@ func pickPrimary(snap core.Snapshot) (core.Reading, bool) {
 	return snap.Lead()
 }
 
-// readings lists every reading but the primary one, one row each, folding the
-// ones past the fourth behind an expander.
+// readings lays every reading but the primary one out as a card, two to a row.
+// A page that fills up with them scrolls rather than folding any away: what a
+// monitor reports is the whole point of its page.
 func (a *App) readings(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
 	primary, _ := pickPrimary(snap)
 	var rest []core.Reading
@@ -117,76 +117,33 @@ func (a *App) readings(c *ui.Context, p palette, in *app.Instance, snap core.Sna
 	if len(rest) == 0 {
 		return
 	}
-
-	shown := rest
-	folded := 0
-	if !a.expanded[in.ID] && len(rest) > maxRows {
-		shown = rest[:maxRows]
-		folded = len(rest) - maxRows
-	}
-
-	card(c, p).Padding(0, 8).Gap(0).Children(func() {
-		for i, r := range shown {
-			if i > 0 {
-				hline(c, p)
-			}
-			a.readingRow(c, p, in, r)
-		}
-		switch {
-		case folded > 0:
-			hline(c, p)
-			label := fmt.Sprintf("显示其余 %d 个", folded)
-			if a.disclosure(c, p, label).Clicked() {
-				a.expanded[in.ID] = true
-			}
-		case a.expanded[in.ID] && len(rest) > maxRows:
-			hline(c, p)
-			if a.disclosure(c, p, "收起").Clicked() {
-				a.expanded[in.ID] = false
-			}
+	ui.Grid(c).Columns(cardsPerRow).Gap(10).Children(func() {
+		for _, r := range rest {
+			a.readingCard(c, p, in, r)
 		}
 	})
 }
 
-// readingRow is one reading: its label on the left, its value on the right,
-// and the trend between them.
-func (a *App) readingRow(c *ui.Context, p palette, in *app.Instance, r core.Reading) {
+// readingCard is one reading as a card: its label, its value in the size the
+// value deserves, whatever explains it, and its trend under them.
+func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Reading) {
 	valueColor := p.Text
 	if r.Severity != core.SeverityNone {
 		valueColor = p.severityColor(r.Severity)
 	}
-	ui.Row(c).Padding(12, 11).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, r.Label).FontSize(12).NoWrap().MaxLines(1)
-		ui.Spacer(c)
-		if history := in.History(r.ID); varies(history) {
-			ui.Box(c).Width(72).Children(func() {
-				sparkline(c, p, history, quietColor(p, r.Severity), 22)
-			})
-		}
+	card(c, p).Padding(13, 11).Gap(2).MinHeight(96).Children(func() {
+		ui.Text(c, r.Label).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
+		// A value of words is set as the same size as a number: a card of
+		// "无线" beside a card of "1200" is one row of cards, not two.
+		ui.Text(c, r.Format()).FontSize(22).Bold().TextColor(valueColor).Wrap().MaxLines(2)
 		if r.Detail != "" {
 			ui.Text(c, r.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
 		}
-		if r.Text != "" {
-			ui.Text(c, r.Text).FontSize(13).Bold().TextColor(valueColor).NoWrap().MaxLines(1)
-			return
+		if history := in.History(r.ID); varies(history) {
+			ui.Spacer(c)
+			sparkline(c, p, history, quietColor(p, r.Severity), 20)
 		}
-		ui.Text(c, r.Format()).FontSize(14).Bold().TextColor(valueColor).NoWrap()
 	})
-}
-
-// disclosure is the row that folds or unfolds the readings below the fourth:
-// the whole row is the button, with the panel's muted ink.
-func (a *App) disclosure(c *ui.Context, p palette, label string) ui.Element {
-	row := ui.Row(c).Padding(10, 11).Gap(6).AlignItems(ui.Center).
-		Cursor(ui.CursorPointer).Key("disclosure")
-	if row.Hovered() {
-		row.Background(p.SurfaceHover)
-	}
-	row.Children(func() {
-		ui.Text(c, label).FontSize(12).TextColor(p.TextMuted).Grow(1)
-		ui.Icon(c, iconChevron).FontSize(12).TextColor(p.TextMuted)
-	})
-	return row
 }
 
 func historyWindow(in *app.Instance, readingID string) string {
