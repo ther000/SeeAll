@@ -22,6 +22,9 @@ func Manifest() plugin.Manifest {
 		Icon:            "mouse",
 		DefaultInstance: "鼠标",
 		Interval:        5 * time.Second,
+		// Battery, link and DPI are one mouse's readings: its page shows them
+		// in one card.
+		Combined: true,
 		Settings: []plugin.Setting{
 			{
 				Key: "vid", Label: "USB 厂商号", Type: plugin.SettingText, Default: "24AE",
@@ -51,6 +54,7 @@ type instance struct {
 	mu       sync.Mutex
 	readers  []*hid.Reader
 	paths    []string
+	device   string
 	frame    Frame
 	hasFrame bool
 	lastAt   time.Time
@@ -155,6 +159,11 @@ func (in *instance) ensureReaders() {
 		in.mu.Lock()
 		in.readers = append(in.readers, reader)
 		in.paths = append(in.paths, intf.Describe())
+		// The receiver names the mouse it belongs to; the panel shows that
+		// name rather than one guessed from the vendor ID.
+		if name := strings.TrimSpace(intf.Product); name != "" {
+			in.device = name
+		}
 		problemCleared := in.problem
 		in.problem = ""
 		in.mu.Unlock()
@@ -254,10 +263,14 @@ func (in *instance) closeReaders() {
 func (in *instance) publish() {
 	in.mu.Lock()
 	frame, hasFrame, lastAt, problem := in.frame, in.hasFrame, in.lastAt, in.problem
+	device := in.device
 	in.mu.Unlock()
 
+	if device == "" {
+		device = "无线鼠标"
+	}
 	now := time.Now()
-	snap := core.Snapshot{At: now, Title: "雷柏 2.4G 鼠标", Primary: "battery"}
+	snap := core.Snapshot{At: now, Title: device, Primary: "battery"}
 	if !hasFrame {
 		snap.Status = core.StatusOffline
 		snap.Subtitle = problem

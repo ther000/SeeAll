@@ -105,7 +105,7 @@ func fixture(size panel.Metrics) (*app.Host, *panel.App) {
 
 	inject("mouse", core.Snapshot{
 		At: now.Add(-2 * time.Second), Status: core.StatusOK,
-		Title: "雷柏 2.4G 鼠标", Subtitle: "无线 · 72%", Primary: "battery",
+		Title: "Rapoo Gaming Device", Subtitle: "无线 · 72%", Primary: "battery",
 		Readings: []core.Reading{
 			{ID: "battery", Label: "电量", Value: 72, Unit: core.UnitPercent,
 				Severity: core.SeverityOK, Detail: "2 秒前"},

@@ -42,7 +42,8 @@ type Instance interface {
 插件不碰 UI、不碰文件路径、不管生命周期。
 
 `Manifest` 声明：ID、显示名、一句话说明、分组（设备/本机）、图标、
-设置字段（`Setting{Key,Label,Type,Default,...}`）、能否多实例、默认实例名、是否实验状态。
+设置字段（`Setting{Key,Label,Type,Default,...}`）、能否多实例、默认实例名、是否实验状态，
+以及 `Combined`——这个插件的读数描述同一个东西，页面用一张卡装下（鼠标：电量/连接/DPI）。
 
 设置页完全由 `Manifest.Settings` 生成：加一个字段就多一个控件，UI 代码不用动。
 
@@ -83,7 +84,8 @@ type Reading struct {
 ```
 
 `Snapshot.Primary` 指定「这页的大数字用哪项」——电量页要环、CPU 页要百分比。
-不指定就退化成「最严重的那项」。
+不指定就退化成「最严重的那项」。`Snapshot.Title` 是设备的真名，鼠标取自接收器的产品字符串
+（`HidD_GetProductString`），不是按 VID 猜的。
 
 ## 面板
 
@@ -114,9 +116,13 @@ Height = round(840 / scale)
 - **标题栏**（`header`）：图标 + 应用名 + 刷新 + 设置。
 - **标签页**（`tabs`）：`ui.TabsBase` 自绘，每项 `Grow(1)` 等宽；选中项白底描边，
   状态非「正常」时标签上带彩点——一次只看得到一页，别页的异常得有地方露。
-- **页面**：`detail` 是主读数大卡 + 其余读数的小卡（`ui.Grid` 两列）。小卡里标签和折线共用顶行
-  （折线居右，`trendWidth`×`trendHeight` 的固定位置，没有折线也占位），下面依次是值与说明；
-  `settings` 是长表单，滚动。
+- **页面**：`detail` 有两种排法，由 `Manifest.Combined` 决定。
+  - 默认：主读数大卡 + 其余读数的小卡（`ui.Grid` 两列）。小卡里标签和折线共用顶行
+    （折线居右，`trendWidth`×`trendHeight` 的固定位置，没有折线也占位），下面依次是值与说明。
+    适合读数在量不同东西的页面（本机：CPU、内存、磁盘）。
+  - `Combined`：整页一张卡——设备名（`Snapshot.Title`）、主读数、其余读数并排在下。
+    适合读数描述同一个东西的页面（鼠标：电量、连接、DPI）。
+  - `settings` 是长表单，滚动。
 
 设置页的「添加」卡片列出**当前没有实例的插件**，所以移除掉的那一项从这里加回来。
 `Host.Remove` 把它当时的设置写进配置文件的 `removed`，`Host.Add` 拿到 `nil` 取值时

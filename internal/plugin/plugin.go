@@ -81,6 +81,10 @@ type Manifest struct {
 	// Experimental marks a plugin whose protocol is not verified on real
 	// hardware; the UI says so instead of pretending.
 	Experimental bool
+	// Combined reads a plugin's page as one card: the readings of one device
+	// belong together, so they go in the hero card under the value rather
+	// than as cards of their own beside it.
+	Combined bool
 }
 
 // Plugin creates instances of one kind of monitor.

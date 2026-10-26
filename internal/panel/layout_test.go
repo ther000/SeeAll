@@ -19,8 +19,8 @@ func fixture(t *testing.T) (*app.Host, *App) {
 	}
 	h.Stop()
 	h.OnChange = func() {}
-	h.Inject("mouse", core.Snapshot{Status: core.StatusOK, Subtitle: "无线 · 72%",
-		Primary: "battery", Readings: []core.Reading{
+	h.Inject("mouse", core.Snapshot{Status: core.StatusOK, Title: "Rapoo Gaming Device",
+		Subtitle: "无线 · 72%", Primary: "battery", Readings: []core.Reading{
 			{ID: "battery", Label: "电量", Value: 72, Unit: core.UnitPercent, Severity: core.SeverityOK},
 			{ID: "link", Label: "连接", Text: "无线", Severity: core.SeverityOK},
 		}})

@@ -22,15 +22,20 @@ const (
 	trendHeight = 18
 )
 
-// detail is a monitor's page: the reading that matters in the hero card at the
-// top, and every other reading as a card of its own under it.
+// detail is a monitor's page. A plugin whose readings belong together gets one
+// card with all of them; any other gets the reading that matters in the hero
+// card and every other reading as a card of its own under it.
 func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 	m := in.Manifest()
 	snap := in.Snapshot()
 
 	ui.Scroll(c).Fill().Padding(14, 4, 14, 10).Gap(10).Children(func() {
-		a.hero(c, p, in, snap)
-		a.readings(c, p, in, snap)
+		if m.Combined {
+			a.combined(c, p, in, snap)
+		} else {
+			a.hero(c, p, in, snap)
+			a.readings(c, p, in, snap)
+		}
 		if m.Experimental {
 			ui.Row(c).Gap(8).Children(func() { badge(c, "实验", p.Warn) })
 		}
@@ -54,35 +59,106 @@ func (a *App) hero(c *ui.Context, p palette, in *app.Instance, snap core.Snapsho
 				ui.Text(c, primary.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap()
 			}
 		})
-		ui.Row(c).AlignItems(ui.Center).Gap(14).Children(func() {
-			if primary.Unit == core.UnitPercent {
-				ui.Box(c).Size(118, 118).
-					Draw(func(pt *ui.Painter, r ui.Rect) {
-						drawRing(pt, r, p.Track, clamp01(primary.Value/100),
-							p.severityColor(primary.Severity), 11)
-					}).Children(func() {
-					ui.Column(c).Fill().Center().Children(func() {
-						ui.Row(c).AlignItems(ui.Baseline).Gap(1).Children(func() {
-							bigValue(c, core.FormatNumber(primary.Value), 36,
-								p.severityColor(primary.Severity))
-							ui.Text(c, "%").FontSize(14).TextColor(p.TextMuted)
-						})
-					})
-				})
-			} else {
-				bigValue(c, primary.Format(), 38, p.severityColor(primary.Severity))
-			}
+		a.heroValue(c, p, in, primary)
+	})
+}
 
-			ui.Column(c).Grow(1).Basis(0).Gap(6).Children(func() {
-				if caption := heroCaption(primary); caption != "" {
-					ui.Text(c, caption).FontSize(13).Wrap().
-						TextColor(p.severityColor(primary.Severity))
-				}
-				if history := in.History(primary.ID); varies(history) {
-					sparkline(c, p, history, quietColor(p, primary.Severity), 44)
-					label(c, p, "最近 "+historyWindow(in, primary.ID))
+// combined is the page of a plugin whose readings describe one device: the
+// device's name, the reading that matters, and the rest of them under it, all
+// in one card.
+func (a *App) combined(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
+	primary, ok := pickPrimary(snap)
+	if !ok {
+		a.heroEmpty(c, p, snap)
+		return
+	}
+	var rest []core.Reading
+	for _, r := range snap.Readings {
+		if r.ID != primary.ID {
+			rest = append(rest, r)
+		}
+	}
+
+	card(c, p).Shrink(0).Padding(15, 13).Gap(10).Children(func() {
+		// The device first: what the numbers below belong to.
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, deviceName(snap)).FontSize(13).Bold().NoWrap().MaxLines(1).Grow(1)
+			if primary.Detail != "" {
+				ui.Text(c, primary.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap()
+			}
+		})
+		// A ring says what it is; any other value needs its name.
+		if primary.Unit != core.UnitPercent {
+			label(c, p, primary.Label)
+		}
+		a.heroValue(c, p, in, primary)
+		if len(rest) > 0 {
+			hline(c, p)
+			ui.Row(c).Gap(0).Children(func() {
+				for _, r := range rest {
+					a.inlineReading(c, p, in, r)
 				}
 			})
+		}
+	})
+}
+
+// deviceName is what the page calls the thing it watches: the name the plugin
+// reports, or the snapshot's subtitle when it has none.
+func deviceName(snap core.Snapshot) string {
+	if snap.Title != "" {
+		return snap.Title
+	}
+	if snap.Subtitle != "" {
+		return snap.Subtitle
+	}
+	return "设备"
+}
+
+// inlineReading is one of the readings a combined card shows beside the
+// others: its label above its value, one cell of a row.
+func (a *App) inlineReading(c *ui.Context, p palette, in *app.Instance, r core.Reading) {
+	valueColor := p.Text
+	if r.Severity != core.SeverityNone {
+		valueColor = p.severityColor(r.Severity)
+	}
+	ui.Column(c).Grow(1).Basis(0).Gap(1).Children(func() {
+		ui.Text(c, r.Label).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
+		ui.Text(c, r.Format()).FontSize(15).Bold().TextColor(valueColor).NoWrap().MaxLines(1)
+	})
+}
+
+// heroValue is the big number of a card: the ring for a percentage, the value
+// itself for anything else, with its trend and caption beside it.
+func (a *App) heroValue(c *ui.Context, p palette, in *app.Instance, primary core.Reading) {
+	ui.Row(c).AlignItems(ui.Center).Gap(14).Children(func() {
+		if primary.Unit == core.UnitPercent {
+			ui.Box(c).Size(118, 118).
+				Draw(func(pt *ui.Painter, r ui.Rect) {
+					drawRing(pt, r, p.Track, clamp01(primary.Value/100),
+						p.severityColor(primary.Severity), 11)
+				}).Children(func() {
+				ui.Column(c).Fill().Center().Children(func() {
+					ui.Row(c).AlignItems(ui.Baseline).Gap(1).Children(func() {
+						bigValue(c, core.FormatNumber(primary.Value), 36,
+							p.severityColor(primary.Severity))
+						ui.Text(c, "%").FontSize(14).TextColor(p.TextMuted)
+					})
+				})
+			})
+		} else {
+			bigValue(c, primary.Format(), 38, p.severityColor(primary.Severity))
+		}
+
+		ui.Column(c).Grow(1).Basis(0).Gap(6).Children(func() {
+			if caption := heroCaption(primary); caption != "" {
+				ui.Text(c, caption).FontSize(13).Wrap().
+					TextColor(p.severityColor(primary.Severity))
+			}
+			if history := in.History(primary.ID); varies(history) {
+				sparkline(c, p, history, quietColor(p, primary.Severity), 44)
+				label(c, p, "最近 "+historyWindow(in, primary.ID))
+			}
 		})
 	})
 }

@@ -95,7 +95,7 @@ func TestFitFitsEveryPage(t *testing.T) {
 		row     string
 		content string
 	}{
-		{"mouse", "电量"},
+		{"mouse", "Rapoo Gaming Device"},
 		{"system", "CPU"},
 		{SettingsPage, "应用"},
 	}
