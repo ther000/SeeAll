@@ -29,6 +29,8 @@ type App struct {
 	drafts map[string]string
 	// confirmRemove is the instance whose remove button was pressed once.
 	confirmRemove string
+	// addChoice is the plugin the add card's select shows.
+	addChoice string
 }
 
 // New makes the panel's state.

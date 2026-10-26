@@ -81,7 +81,11 @@ func (a *App) instanceCard(c *ui.Context, p palette, in *app.Instance) {
 				if confirming {
 					a.confirmRemove = ""
 					a.Host.Remove(in.ID)
-					a.drafts[in.ID] = ""
+					for key := range a.drafts {
+						if strings.HasPrefix(key, in.ID+"/") {
+							delete(a.drafts, key)
+						}
+					}
 					a.ensureSelection(a.Host.Instances())
 					a.SetSelected(a.Selected())
 					c.Toast("已移除 " + in.Name)
@@ -193,51 +197,86 @@ func parsesNumber(s string) bool {
 	return err == nil
 }
 
-// addCard adds another instance of a plugin that takes several, as a plugin
-// with one monitor per host would.
+// addCard offers every plugin the page could run that it does not run now: a
+// monitor the user removed comes back from here, with its settings as they
+// were.
 func (a *App) addCard(c *ui.Context, p palette) {
-	multi := make([]plugin.Plugin, 0, 2)
-	for _, pl := range a.Host.Plugins() {
-		if pl.Manifest().Multiple {
-			multi = append(multi, pl)
-		}
-	}
-	if len(multi) == 0 {
+	missing := a.missingPlugins()
+	if len(missing) == 0 {
 		return
 	}
 
 	card(c, p).Children(func() {
 		label(c, p, "添加")
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			names := make([]string, 0, len(multi))
-			for _, pl := range multi {
-				names = append(names, pl.Manifest().Name)
+			names := make([]string, len(missing))
+			for i, pl := range missing {
+				names[i] = pl.Manifest().Name
 			}
 			chosen := names[0]
-			ui.Select(c, &chosen, names).Grow(1).Label("插件")
+			for i := range missing {
+				if a.addChoice == missing[i].Manifest().ID {
+					chosen = names[i]
+				}
+			}
+			if ui.Select(c, &chosen, names).Grow(1).Label("插件").Changed() {
+				a.addChoice = pluginIDNamed(missing, chosen)
+			}
 			if ui.Button(c, "").Label("添加监控项").Children(func() {
 				ui.Icon(c, iconPlus).FontSize(13)
 				ui.Text(c, "添加").FontSize(12).SingleLine()
 			}).Clicked() {
-				for _, pl := range multi {
-					if pl.Manifest().Name != chosen {
-						continue
-					}
-					m := pl.Manifest()
-					name := uniqueName(a.Host, m)
-					added := a.Host.Add(m.ID, name, nil)
-					if added == nil {
-						c.Toast("加不上 " + name)
-						return
-					}
-					a.SetSelected(added.ID)
-					c.Toast("已添加 " + added.Name)
-					return
-				}
+				a.add(c, p, pluginIDNamed(missing, chosen))
 			}
 		})
-		ui.Text(c, "这类插件可以加多个，每个监控一个对象。").FontSize(11).TextColor(p.TextMuted).Wrap()
 	})
+}
+
+// missingPlugins lists the plugins without an instance, in the order the tabs
+// would show them.
+func (a *App) missingPlugins() []plugin.Plugin {
+	running := map[string]bool{}
+	for _, in := range a.Host.Instances() {
+		running[in.PluginID] = true
+	}
+	var out []plugin.Plugin
+	for _, pl := range a.Host.Plugins() {
+		m := pl.Manifest()
+		if running[m.ID] {
+			continue
+		}
+		out = append(out, pl)
+	}
+	return out
+}
+
+// add starts a monitor again from the settings page. It comes back with the
+// settings it had: the host keeps those of a monitor the user removed.
+func (a *App) add(c *ui.Context, p palette, pluginID string) {
+	pl := a.Host.Plugin(pluginID)
+	if pl == nil {
+		return
+	}
+	m := pl.Manifest()
+	name := uniqueName(a.Host, m)
+	added := a.Host.Add(m.ID, name, nil)
+	if added == nil {
+		c.Toast("加不上 " + name)
+		return
+	}
+	a.addChoice = ""
+	a.SetSelected(added.ID)
+	c.Toast("已添加 " + added.Name)
+}
+
+// pluginIDNamed maps the label the select shows back to a plugin's ID.
+func pluginIDNamed(plugins []plugin.Plugin, name string) string {
+	for _, pl := range plugins {
+		if pl.Manifest().Name == name {
+			return pl.Manifest().ID
+		}
+	}
+	return ""
 }
 
 // uniqueName makes a name that no instance of the plugin uses yet.

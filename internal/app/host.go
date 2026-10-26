@@ -140,7 +140,11 @@ func (h *Host) Load() error {
 
 	h.OnNotify = func(title, body string) { h.Notify(title, body) }
 
-	if len(state.Instances) == 0 {
+	// A file that was written but holds no instance is a user who removed
+	// them all, and their choice stands across a restart. Only a machine that
+	// never ran SeeAll — no file, so no version — starts with every plugin's
+	// default monitor.
+	if state.Version == 0 {
 		for _, p := range h.Plugins() {
 			m := p.Manifest()
 			h.Add(m.ID, m.DefaultInstance, nil)
@@ -158,6 +162,10 @@ func (h *Host) Load() error {
 }
 
 // Add makes and starts an instance.
+//
+// A plugin the user removed earlier comes back with the settings it had: nil
+// values take those the host saved when the monitor went away, so that
+// removing one is not a way to forget how it was set up.
 func (h *Host) Add(pluginID, name string, values map[string]string) *Instance {
 	p := h.Plugin(pluginID)
 	if p == nil {
@@ -166,6 +174,13 @@ func (h *Host) Add(pluginID, name string, values map[string]string) *Instance {
 	m := p.Manifest()
 	if name == "" {
 		name = m.DefaultInstance
+	}
+	restoring := false
+	if values == nil {
+		h.mu.RLock()
+		values = h.saved.Removed[pluginID]
+		restoring = values != nil
+		h.mu.RUnlock()
 	}
 	id := m.ID
 	if m.Multiple {
@@ -200,6 +215,11 @@ func (h *Host) Add(pluginID, name string, values map[string]string) *Instance {
 	h.mu.Lock()
 	h.instances = append(h.instances, in)
 	h.byID[id] = in
+	// The monitor runs again, so the settings kept for it are no longer
+	// waiting to be restored.
+	if restoring {
+		delete(h.saved.Removed, pluginID)
+	}
 	h.mu.Unlock()
 
 	if in.monitor != nil {
@@ -224,6 +244,14 @@ func (h *Host) Remove(id string) {
 			h.instances = append(h.instances[:i], h.instances[i+1:]...)
 			break
 		}
+	}
+	// Keep how it was set up, so that adding it back restores the monitor
+	// rather than a fresh one.
+	if len(in.Manifest().Settings) > 0 {
+		if h.saved.Removed == nil {
+			h.saved.Removed = map[string]map[string]string{}
+		}
+		h.saved.Removed[in.PluginID] = in.Settings().All()
 	}
 	h.mu.Unlock()
 
@@ -373,6 +401,9 @@ type fileState struct {
 	Version   int          `json:"version"`
 	Instances []savedEntry `json:"instances"`
 	UI        savedUI      `json:"ui"`
+	// Removed holds the settings of the monitors the user took away, by
+	// plugin: adding one back goes through Add, which reads them.
+	Removed map[string]map[string]string `json:"removed,omitempty"`
 }
 
 type savedEntry struct {
@@ -411,6 +442,7 @@ func (h *Host) save() {
 	state := fileState{Version: 1}
 	h.mu.RLock()
 	state.UI = h.saved.UI
+	state.Removed = h.saved.Removed
 	for _, in := range h.instances {
 		state.Instances = append(state.Instances, savedEntry{
 			PluginID: in.PluginID,
