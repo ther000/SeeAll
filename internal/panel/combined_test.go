@@ -24,8 +24,8 @@ func combinedFixture(t *testing.T) (*app.Host, *App) {
 }
 
 // TestCombinedPageIsOneCard checks a plugin whose readings describe one device
-// shows them in a single card: the device's name, the headline reading, and
-// link and DPI together under it, rather than as cards of their own.
+// shows them in a single card: the device's name across the top, the level on
+// the left, and link and DPI down the right, one to a line.
 func TestCombinedPageIsOneCard(t *testing.T) {
 	_, p := combinedFixture(t)
 	p.SetSelected("mouse")
@@ -45,23 +45,63 @@ func TestCombinedPageIsOneCard(t *testing.T) {
 		t.Errorf("the battery sits above the device name: %v vs %v", battery.Y, name.Y)
 	}
 
-	// The other readings are in the same card, under the level, so they must
-	// sit below it and above the card's bottom edge.
-	for _, want := range []string{"连接", "无线", "DPI", "1200"} {
-		r, ok := tt.Find(want)
+	// The other readings are in the same card, down its right side, one
+	// reading to a line: a label and its value share a row, and the rows run
+	// down the card.
+	rows := []struct{ label, value string }{
+		{"连接", "无线"},
+		{"DPI", "1200"},
+	}
+	var previous float32
+	for i, row := range rows {
+		label, ok := tt.Find(row.label)
 		if !ok {
-			t.Fatalf("the card shows no %q: %v", want, tt.Texts())
+			t.Fatalf("the card shows no %q: %v", row.label, tt.Texts())
 		}
-		if r.Y <= battery.Y {
-			t.Errorf("%q sits at y=%v, above the level at y=%v", want, r.Y, battery.Y)
+		value, ok := tt.Find(row.value)
+		if !ok {
+			t.Fatalf("the card shows no %q: %v", row.value, tt.Texts())
+		}
+		if label.X <= battery.X || value.X <= battery.X {
+			t.Errorf("%q and %q sit at x=%v and x=%v, not to the right of the level at x=%v",
+				row.label, row.value, label.X, value.X, battery.X)
+		}
+		if value.X <= label.X {
+			t.Errorf("%q at x=%v is not to the right of %q at x=%v", row.value, value.X, row.label, label.X)
+		}
+		// Baseline alignment leaves a pixel or two between the two.
+		if diff := label.Y - value.Y; diff > 6 || diff < -6 {
+			t.Errorf("%q and %q are not on one row: y=%v vs y=%v", row.label, row.value, label.Y, value.Y)
+		}
+		if i > 0 && label.Y <= previous {
+			t.Errorf("%q sits at y=%v, not below the reading before it at y=%v", row.label, label.Y, previous)
+		}
+		previous = label.Y
+	}
+}
+
+// TestCombinedPageShowsNoTrendOrWording checks the combined card keeps to the
+// number and the device: a battery page has no trend line and no "电量充足"
+// beside the ring, which a glance at the ring already says.
+func TestCombinedPageShowsNoTrendOrWording(t *testing.T) {
+	_, p := combinedFixture(t)
+	// A history long enough that the separate page would draw a trend.
+	p.Host.InjectHistory("mouse", "battery", []float64{72, 70, 74, 71, 73, 72})
+	p.SetSelected("mouse")
+	p.SetSize(Fit(1920, 1040, 1))
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+
+	for _, unwanted := range []string{"电量充足", "还够用", "该充电了"} {
+		if tt.HasText(unwanted) {
+			t.Errorf("the card says %q beside the ring: %v", unwanted, tt.Texts())
 		}
 	}
-
-	// One card means no gap of a card between the level and the readings
-	// under it: the readings are in the same box, close below it.
-	link, _ := tt.Find("连接")
-	if link.Y-battery.Y > 160 {
-		t.Errorf("the readings under the level are %v away: a second card", link.Y-battery.Y)
+	if tt.HasText("最近") {
+		t.Errorf("the card draws a trend: %v", tt.Texts())
+	}
+	// The value itself is still there.
+	if !tt.HasText("72") {
+		t.Errorf("the card shows no level: %v", tt.Texts())
 	}
 }
 

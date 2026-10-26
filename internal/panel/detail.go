@@ -63,9 +63,9 @@ func (a *App) hero(c *ui.Context, p palette, in *app.Instance, snap core.Snapsho
 	})
 }
 
-// combined is the page of a plugin whose readings describe one device: the
-// device's name, the reading that matters, and the rest of them under it, all
-// in one card.
+// combined is the page of a plugin whose readings describe one device: its
+// name across the top, the reading that matters on the left, and the rest of
+// them down the right, one to a line.
 func (a *App) combined(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
 	primary, ok := pickPrimary(snap)
 	if !ok {
@@ -79,7 +79,7 @@ func (a *App) combined(c *ui.Context, p palette, in *app.Instance, snap core.Sna
 		}
 	}
 
-	card(c, p).Shrink(0).Padding(15, 13).Gap(10).Children(func() {
+	card(c, p).Shrink(0).Padding(15, 13).Gap(8).Children(func() {
 		// The device first: what the numbers below belong to.
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, deviceName(snap)).FontSize(13).Bold().NoWrap().MaxLines(1).Grow(1)
@@ -87,19 +87,44 @@ func (a *App) combined(c *ui.Context, p palette, in *app.Instance, snap core.Sna
 				ui.Text(c, primary.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap()
 			}
 		})
-		// A ring says what it is; any other value needs its name.
-		if primary.Unit != core.UnitPercent {
-			label(c, p, primary.Label)
-		}
-		a.heroValue(c, p, in, primary)
-		if len(rest) > 0 {
-			hline(c, p)
-			ui.Row(c).Gap(0).Children(func() {
-				for _, r := range rest {
-					a.inlineReading(c, p, in, r)
-				}
+		ui.Row(c).AlignItems(ui.Center).Gap(16).Children(func() {
+			a.headline(c, p, primary)
+			// The device's other readings sit beside its level rather than
+			// under it: one card, read left to right.
+			if len(rest) > 0 {
+				ui.Column(c).Grow(1).Basis(0).Gap(10).Children(func() {
+					for _, r := range rest {
+						a.inlineReading(c, p, in, r)
+					}
+				})
+			}
+		})
+	})
+}
+
+// headline is the reading a card is about: the ring for a percentage, the
+// value itself for anything else. A combined page shows no trend and no
+// wording beside it — the number and the device name say enough.
+func (a *App) headline(c *ui.Context, p palette, primary core.Reading) {
+	if primary.Unit == core.UnitPercent {
+		ui.Box(c).Size(110, 110).
+			Draw(func(pt *ui.Painter, r ui.Rect) {
+				drawRing(pt, r, p.Track, clamp01(primary.Value/100),
+					p.severityColor(primary.Severity), 10)
+			}).Children(func() {
+			ui.Column(c).Fill().Center().Children(func() {
+				ui.Row(c).AlignItems(ui.Baseline).Gap(1).Children(func() {
+					bigValue(c, core.FormatNumber(primary.Value), 34,
+						p.severityColor(primary.Severity))
+					ui.Text(c, "%").FontSize(13).TextColor(p.TextMuted)
+				})
 			})
-		}
+		})
+		return
+	}
+	ui.Column(c).Gap(1).Children(func() {
+		label(c, p, primary.Label)
+		bigValue(c, primary.Format(), 34, p.severityColor(primary.Severity))
 	})
 }
 
@@ -115,15 +140,15 @@ func deviceName(snap core.Snapshot) string {
 	return "设备"
 }
 
-// inlineReading is one of the readings a combined card shows beside the
-// others: its label above its value, one cell of a row.
+// inlineReading is one of the readings a combined card shows down its right:
+// its label and its value on one line, the two ends of a row.
 func (a *App) inlineReading(c *ui.Context, p palette, in *app.Instance, r core.Reading) {
 	valueColor := p.Text
 	if r.Severity != core.SeverityNone {
 		valueColor = p.severityColor(r.Severity)
 	}
-	ui.Column(c).Grow(1).Basis(0).Gap(1).Children(func() {
-		ui.Text(c, r.Label).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
+	ui.Row(c).Gap(8).AlignItems(ui.Baseline).Children(func() {
+		ui.Text(c, r.Label).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1).Grow(1)
 		ui.Text(c, r.Format()).FontSize(15).Bold().TextColor(valueColor).NoWrap().MaxLines(1)
 	})
 }
