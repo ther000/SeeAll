@@ -15,7 +15,7 @@ import (
 // settings is the panel's settings page: which monitors run, what each one
 // watches, and how the app itself behaves.
 func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
-	ui.Scroll(c).Fill().Padding(16, 6, 16, 14).Gap(10).Children(func() {
+	ui.Scroll(c).Fill().Padding(14, 4, 14, 10).Gap(10).Children(func() {
 		ui.Text(c, "设置").FontSize(13).Bold()
 		card(c, p).Children(func() {
 			label(c, p, "应用")

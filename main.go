@@ -114,32 +114,33 @@ func (s *state) ready() {
 	}
 }
 
-// screenWorkArea is the work area of the display the panel docks into: the
-// one holding the tray icon, or the primary display when the icon reports no
-// bounds, as AppIndicator does on Linux.
+// display is the one the panel docks into: the one holding the tray icon, or
+// the primary display when the icon reports no bounds, as AppIndicator does on
+// Linux. Its scale turns the panel's pixel design into the DIPs a window takes.
 //
 // It reads the displays, so it only runs once the app is ready.
-func (s *state) screenWorkArea() mygo.Rectangle {
+func (s *state) display() mygo.Display {
 	if s.tray != nil {
 		if anchor := s.tray.Bounds(); anchor.Width > 0 && anchor.Height > 0 {
 			return mygo.Screen.DisplayNearestPoint(mygo.Point{
 				X: anchor.X + anchor.Width/2,
 				Y: anchor.Y + anchor.Height/2,
-			}).WorkArea
+			})
 		}
 	}
-	return mygo.Screen.PrimaryDisplay().WorkArea
+	return mygo.Screen.PrimaryDisplay()
 }
 
 // dockArea is the room the panel may fill: the work area less the margin that
 // keeps it off the screen edge and above the taskbar.
-func (s *state) dockArea() mygo.Rectangle {
-	return tray.Inset(s.screenWorkArea(), tray.Margin)
+func (s *state) dockArea(d mygo.Display) mygo.Rectangle {
+	return tray.Inset(d.WorkArea, panel.MarginDIP(d.ScaleFactor))
 }
 
 func (s *state) createWindow() {
-	area := s.dockArea()
-	s.metrics = panel.Fit(area.Width, area.Height)
+	d := s.display()
+	area := s.dockArea(d)
+	s.metrics = panel.Fit(area.Width, area.Height, d.ScaleFactor)
 	s.panel.SetSize(s.metrics)
 	x, y := tray.Dock(area, s.metrics.Width, s.metrics.Height)
 
@@ -179,11 +180,12 @@ func (s *state) createWindow() {
 
 // refit re-measures the display and keeps the panel in its corner.
 func (s *state) refit() {
-	area := s.dockArea()
+	d := s.display()
+	area := s.dockArea(d)
 	if area.Width == 0 {
 		return
 	}
-	m := panel.Fit(area.Width, area.Height)
+	m := panel.Fit(area.Width, area.Height, d.ScaleFactor)
 	if m.Width != s.metrics.Width || m.Height != s.metrics.Height {
 		s.metrics = m
 		s.panel.SetSize(m)

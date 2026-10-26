@@ -37,15 +37,15 @@ func TestInsetWithoutWorkArea(t *testing.T) {
 func TestDockPutsThePanelInTheCorner(t *testing.T) {
 	// A 2560×1440 display with a 72-pixel taskbar at 96 DPI, less the margin.
 	area := rect(0, 0, 2552, 1360)
-	x, y := Dock(area, 660, 840)
-	if x != 2552-660 || y != 1360-840 {
-		t.Errorf("Dock = (%d, %d), want (%d, %d)", x, y, 2552-660, 1360-840)
+	x, y := Dock(area, 440, 560)
+	if x != 2552-440 || y != 1360-560 {
+		t.Errorf("Dock = (%d, %d), want (%d, %d)", x, y, 2552-440, 1360-560)
 	}
 
 	// A second display to the right docks against its own right edge.
 	second := rect(2560, 0, 1912, 1032)
-	x, y = Dock(second, 660, 840)
-	if x != 2560+1912-660 || y != 1032-840 {
+	x, y = Dock(second, 440, 560)
+	if x != 2560+1912-440 || y != 1032-560 {
 		t.Errorf("Dock on the second display = (%d, %d)", x, y)
 	}
 }
@@ -63,7 +63,7 @@ func TestDockNeverLeavesTheArea(t *testing.T) {
 // TestDockWithoutArea leaves the panel where it is when the display is
 // unknown.
 func TestDockWithoutArea(t *testing.T) {
-	if x, y := Dock(rect(0, 0, 0, 0), 660, 840); x != 0 || y != 0 {
+	if x, y := Dock(rect(0, 0, 0, 0), 440, 560); x != 0 || y != 0 {
 		t.Errorf("Dock without an area = (%d, %d), want (0, 0)", x, y)
 	}
 }

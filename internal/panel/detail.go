@@ -21,7 +21,7 @@ func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 	m := in.Manifest()
 	snap := in.Snapshot()
 
-	ui.Scroll(c).Fill().Padding(16, 6, 16, 14).Gap(12).Children(func() {
+	ui.Scroll(c).Fill().Padding(14, 4, 14, 10).Gap(10).Children(func() {
 		a.hero(c, p, in, snap)
 		a.readings(c, p, in, snap)
 		if m.Experimental {
@@ -39,7 +39,7 @@ func (a *App) hero(c *ui.Context, p palette, in *app.Instance, snap core.Snapsho
 		return
 	}
 
-	card(c, p).Shrink(0).Padding(18, 16).Children(func() {
+	card(c, p).Shrink(0).Padding(14, 12).Children(func() {
 		ui.Row(c).Gap(4).AlignItems(ui.Baseline).Children(func() {
 			label(c, p, primary.Label)
 			ui.Spacer(c)
@@ -47,32 +47,32 @@ func (a *App) hero(c *ui.Context, p palette, in *app.Instance, snap core.Snapsho
 				ui.Text(c, primary.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap()
 			}
 		})
-		ui.Row(c).AlignItems(ui.Center).Gap(20).Children(func() {
+		ui.Row(c).AlignItems(ui.Center).Gap(14).Children(func() {
 			if primary.Unit == core.UnitPercent {
-				ui.Box(c).Size(172, 172).
+				ui.Box(c).Size(118, 118).
 					Draw(func(pt *ui.Painter, r ui.Rect) {
 						drawRing(pt, r, p.Track, clamp01(primary.Value/100),
-							p.severityColor(primary.Severity), 15)
+							p.severityColor(primary.Severity), 11)
 					}).Children(func() {
 					ui.Column(c).Fill().Center().Children(func() {
 						ui.Row(c).AlignItems(ui.Baseline).Gap(1).Children(func() {
-							bigValue(c, core.FormatNumber(primary.Value), 50,
+							bigValue(c, core.FormatNumber(primary.Value), 36,
 								p.severityColor(primary.Severity))
-							ui.Text(c, "%").FontSize(19).TextColor(p.TextMuted)
+							ui.Text(c, "%").FontSize(14).TextColor(p.TextMuted)
 						})
 					})
 				})
 			} else {
-				bigValue(c, primary.Format(), 52, p.severityColor(primary.Severity))
+				bigValue(c, primary.Format(), 38, p.severityColor(primary.Severity))
 			}
 
-			ui.Column(c).Grow(1).Basis(0).Gap(8).Children(func() {
+			ui.Column(c).Grow(1).Basis(0).Gap(6).Children(func() {
 				if caption := heroCaption(primary); caption != "" {
-					ui.Text(c, caption).FontSize(14).Wrap().
+					ui.Text(c, caption).FontSize(13).Wrap().
 						TextColor(p.severityColor(primary.Severity))
 				}
 				if history := in.History(primary.ID); varies(history) {
-					sparkline(c, p, history, quietColor(p, primary.Severity), 56)
+					sparkline(c, p, history, quietColor(p, primary.Severity), 44)
 					label(c, p, "最近 "+historyWindow(in, primary.ID))
 				}
 			})
@@ -155,11 +155,11 @@ func (a *App) readingRow(c *ui.Context, p palette, in *app.Instance, r core.Read
 	if r.Severity != core.SeverityNone {
 		valueColor = p.severityColor(r.Severity)
 	}
-	ui.Row(c).Padding(12, 14).Gap(10).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Padding(12, 11).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, r.Label).FontSize(12).NoWrap().MaxLines(1)
 		ui.Spacer(c)
 		if history := in.History(r.ID); varies(history) {
-			ui.Box(c).Width(96).Children(func() {
+			ui.Box(c).Width(72).Children(func() {
 				sparkline(c, p, history, quietColor(p, r.Severity), 22)
 			})
 		}

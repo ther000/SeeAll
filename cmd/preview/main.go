@@ -37,9 +37,12 @@ func main() {
 
 	// The preview draws the panel this machine gets: a 2560×1440 display at
 	// 150% scaling, so the work area is 1706×912 DIPs, less the margin that
-	// keeps the panel off the screen edge and above the taskbar.
-	area := tray.Inset(mygo.Rectangle{Width: 1706, Height: 912}, tray.Margin)
-	fitted := panel.Fit(area.Width, area.Height)
+	// keeps the panel off the screen edge and above the taskbar. The design is
+	// in pixels, so the scale decides how many DIPs the same pixels take.
+	const displayScale = 1.5
+	area := tray.Inset(mygo.Rectangle{Width: 1706, Height: 912},
+		panel.MarginDIP(displayScale))
+	fitted := panel.Fit(area.Width, area.Height, displayScale)
 	w, h := *width, *height
 	if w == 0 {
 		w = fitted.Width

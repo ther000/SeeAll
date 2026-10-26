@@ -42,7 +42,7 @@ func New(host *app.Host) *App {
 		selected: host.LastInstance(),
 		drafts:   map[string]string{},
 		expanded: map[string]bool{},
-		Size:     Fit(1920, 1040),
+		Size:     Fit(1920, 1040, 1),
 	}
 }
 
@@ -103,9 +103,9 @@ func (a *App) View(c *ui.Context) {
 // header is the title bar: what the panel is, and the refresh it offers from
 // any page.
 func (a *App) header(c *ui.Context, p palette) {
-	ui.Row(c).Shrink(0).Padding(16, 12).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, iconLogo).FontSize(20).TextColor(p.Accent)
-		ui.Text(c, "SeeAll").FontSize(15).Bold().Grow(1)
+	ui.Row(c).Shrink(0).Padding(14, 10).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, iconLogo).FontSize(17).TextColor(p.Accent)
+		ui.Text(c, "SeeAll").FontSize(14).Bold().Grow(1)
 		if ui.Button(c, "").Label("刷新").Description("刷新全部").Tooltip("刷新全部（Ctrl+R）").Children(func() {
 			ui.Icon(c, iconRefresh).FontSize(15)
 		}).Clicked() {
@@ -129,7 +129,7 @@ func (a *App) tabs(c *ui.Context, p palette, instances []*app.Instance) {
 	if len(items) == 0 {
 		return
 	}
-	ui.Row(c).Shrink(0).Padding(12, 6).Children(func() {
+	ui.Row(c).Shrink(0).Padding(10, 2).Children(func() {
 		tabs := ui.TabsBase(c, &a.tab, len(items))
 		// The settings are not a tab, so none of them is lit while they
 		// show: a lit tab would claim a page that is not on screen.
@@ -150,15 +150,15 @@ func (a *App) tabs(c *ui.Context, p palette, instances []*app.Instance) {
 // the monitor behind it is fine, which the page cannot show for the tabs it is
 // not on.
 func (a *App) tabButton(c *ui.Context, p palette, tab ui.Element, on bool, icon *ui.SVG, name string, status core.Status) {
-	tab.Grow(1).Basis(0).Justify(ui.Center).Padding(8, 10).Radius(9).
-		Gap(6).AlignItems(ui.Center).FocusRing(false)
+	tab.Grow(1).Basis(0).Justify(ui.Center).Padding(7, 8).Radius(8).
+		Gap(5).AlignItems(ui.Center).FocusRing(false)
 	if on {
 		tab.Background(p.Card).Border(1, p.CardBorder)
 	} else if tab.Hovered() {
 		tab.Background(p.SurfaceHover)
 	}
 	tab.Children(func() {
-		ui.Icon(c, icon).FontSize(13).TextColor(colorIf(on, p.Accent, p.TextMuted))
+		ui.Icon(c, icon).FontSize(12).TextColor(colorIf(on, p.Accent, p.TextMuted))
 		ui.Text(c, name).FontSize(12).NoWrap().MaxLines(1).Bold()
 		if status != core.StatusOK {
 			dot(c, p.statusColor(status), 6)
@@ -170,7 +170,7 @@ func (a *App) tabButton(c *ui.Context, p palette, tab ui.Element, on bool, icon 
 // the two things that leave the panel on the right.
 func (a *App) footer(c *ui.Context, p palette, instances []*app.Instance) {
 	ui.Box(c).Shrink(0).Height(1).Background(p.CardBorder)
-	ui.Row(c).Shrink(0).Padding(16, 9).Gap(2).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Shrink(0).Padding(14, 7).Gap(2).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, a.statusLine(instances)).FontSize(11).TextColor(p.TextMuted).
 			Grow(1).NoWrap().MaxLines(1)
 		if ui.Button(c, "").Label("日志").Description("打开日志").Tooltip("打开日志").Children(func() {

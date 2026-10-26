@@ -87,18 +87,23 @@ type Reading struct {
 
 ## 面板
 
-停在**屏幕右下角，离边缘和任务栏各 8 DIP**——`tray.Inset(work, tray.Margin)` 把工作区
+停在**屏幕右下角，离边缘和任务栏各 8 像素**——`tray.Inset(work, marginDIPs)` 把工作区
 内缩，`tray.Dock(area, w, h)` 再右下对齐。工作区本身已排除任务栏，边距是额外留的浮起感。
 
-尺寸由 `panel.Fit(areaW, areaH)` 算，**比例固定、尺寸不固定**：
+**尺寸的单位是物理像素，不是 DIP。** 设计稿画的是 660×840 px，而窗口只收 DIP，
+所以 `panel.Fit` 和 `panel.MarginDIP` 都要显示器的 `ScaleFactor`：
 
 ```go
-const DesignWidth, DesignHeight = 660, 840   // 比例，不是尺寸
-Width, Height = 设计的比例里最大的那个
+const DesignWidth, DesignHeight = 660, 840   // 像素
+Width  = round(660 / scale)                  // DIP：1x→660，1.5x→440，2x→330
+Height = round(840 / scale)
 ```
 
-放得下就是 660×840；高度不够先按高度等比缩，宽度再兜一次底。
-屏幕再大也不跟着长——托盘面板不该铺满屏幕，这一点和老版本「贴内容长」的错误正好相反。
+这样面板在任何缩放下都占同样多的屏幕像素。写反了（把 660×840 当 DIP）在 150% 的机器上
+会变成 990×1260 px，大一倍半——`fit_test.go` 有一条测试专门钉这个换算。
+
+放不下时按高度等比缩，宽度再兜一次底。屏幕再大也不跟着长——托盘面板不该铺满屏幕，
+这一点和老版本「贴内容长」的错误正好相反。
 
 一次算定，切页、关掉重开都不变；内容装不下时页内滚动。**这是从老项目继承的硬约束**：
 老版本用 `SizeToContent` 让窗口贴着内容长，结果设置页一开就长出屏幕外。
