@@ -1,0 +1,25 @@
+# 产物：可重新生成，不进版本库（见 README「已打好的产物」）
+/SeeAll.exe
+/seeall.exe
+/build/
+/dist/
+
+# 开发期临时目录
+/.preview/
+
+# 框架源码参考副本（26 MB，clone 得到，不是本项目代码）
+/.ref/
+
+# 被重写的老项目：并排留在磁盘上作对照，本身是独立仓库
+/鼠标电量显示/
+
+# 编辑器与系统
+/.idea/
+/.vscode/
+*.swp
+Thumbs.db
+.DS_Store
+
+# 签名与敏感配置
+*.pfx
+*.snk

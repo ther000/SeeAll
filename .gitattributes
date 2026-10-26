@@ -1,0 +1,16 @@
+# 文本文件统一 LF，二进制显式标注，避免 Windows 上的 CRLF 造成虚高 diff。
+* text=auto eol=lf
+
+*.go    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.mod   text eol=lf
+*.sum   text eol=lf
+
+*.png   binary
+*.ico   binary
+*.exe   binary
+
+*.ps1   text eol=lf
+*.gitattributes text eol=lf
+*.gitignore     text eol=lf

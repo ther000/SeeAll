@@ -1,0 +1,95 @@
+// Package mouse watches the battery and settings of a wireless mouse that
+// broadcasts its state over a vendor HID collection, as the Rapoo VT9 PRO
+// does through its 2.4G receiver.
+package mouse
+
+import "seeall/internal/core"
+
+// The Rapoo state frame, verified on a VT9 PRO (VID:PID 24AE:185A and
+// 24AE:418A):
+//
+//	BB B0 41 B0 04 02 64
+//	│  │  │  └─┬─┘ │  └─ battery 0..100
+//	│  │  │    │   └─── link flag: 0x01 wireless, 0x02 wired
+//	│  │  │    └─────── DPI, u16 little endian
+//	│  │  └──────────── model / channel tag
+//	│  └─────────────── frame type: state broadcast
+//	└────────────────── report ID
+const (
+	// rapooVendorID is Rapoo's USB vendor ID.
+	rapooVendorID uint16 = 0x24AE
+	// batteryUsagePage is the vendor page the state broadcasts on.
+	batteryUsagePage uint16 = 0xFF00
+	// batteryUsage is the usage of the collecting that broadcasts.
+	batteryUsage uint16 = 0x0002
+	// frameLength is the smallest state frame the panel parses.
+	frameLength = 7
+	// batteryOffset is where the percentage sits.
+	batteryOffset = 6
+)
+
+// Frame is one parsed state broadcast.
+type Frame struct {
+	// Battery is the percentage, 0..100.
+	Battery int
+	// DPI is the current resolution, from the frame itself: this receiver
+	// has no read-back channel, so the frame is the only trustworthy
+	// source for it.
+	DPI int
+	// DeviceTag is byte 2, which changes between models and channels.
+	DeviceTag byte
+	// Link is byte 5: 0x01 wireless, 0x02 wired.
+	Link byte
+	// Raw is the report the frame came from.
+	Raw []byte
+}
+
+// Wired reports whether the mouse is charging over its cable.
+func (f Frame) Wired() bool { return f.Link == 0x02 }
+
+// LinkText names the link for people.
+func (f Frame) LinkText() string {
+	switch f.Link {
+	case 0x01:
+		return "无线"
+	case 0x02:
+		return "有线"
+	default:
+		return "未知连接"
+	}
+}
+
+// ParseFrame reads one report, or returns false when it is not a state
+// broadcast.
+func ParseFrame(report []byte) (Frame, bool) {
+	if len(report) < frameLength {
+		return Frame{}, false
+	}
+	if report[0] != 0xBB || report[1] != 0xB0 {
+		return Frame{}, false
+	}
+	level := int(report[batteryOffset])
+	if level < 0 || level > 100 {
+		return Frame{}, false
+	}
+	return Frame{
+		Battery:   level,
+		DPI:       int(report[3]) | int(report[4])<<8,
+		DeviceTag: report[2],
+		Link:      report[5],
+		Raw:       append([]byte(nil), report...),
+	}, true
+}
+
+// batterySeverity colors a battery level: below 10% it is critical, below
+// 30% it is worth a look.
+func batterySeverity(level int) core.Severity {
+	switch {
+	case level <= 10:
+		return core.SeverityCritical
+	case level <= 30:
+		return core.SeverityWarn
+	default:
+		return core.SeverityOK
+	}
+}
