@@ -404,6 +404,10 @@ type fileState struct {
 	// Removed holds the settings of the monitors the user took away, by
 	// plugin: adding one back goes through Add, which reads them.
 	Removed map[string]map[string]string `json:"removed,omitempty"`
+	// Order holds the order a page's cards were dragged into, by instance:
+	// the reading IDs as the user arranged them. A reading a plugin stops
+	// reporting is simply absent, and one it starts reporting is appended.
+	Order map[string][]string `json:"order,omitempty"`
 }
 
 type savedEntry struct {
@@ -443,6 +447,7 @@ func (h *Host) save() {
 	h.mu.RLock()
 	state.UI = h.saved.UI
 	state.Removed = h.saved.Removed
+	state.Order = h.saved.Order
 	for _, in := range h.instances {
 		state.Instances = append(state.Instances, savedEntry{
 			PluginID: in.PluginID,
@@ -490,6 +495,26 @@ func (h *Host) LastInstance() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.saved.UI.LastInstance
+}
+
+// CardOrder returns the order the cards of an instance's page were dragged
+// into: reading IDs, most wanted first. An instance the user has not arranged
+// has none, and its page keeps the plugin's own order.
+func (h *Host) CardOrder(instanceID string) []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return append([]string(nil), h.saved.Order[instanceID]...)
+}
+
+// SetCardOrder remembers the order of an instance's cards.
+func (h *Host) SetCardOrder(instanceID string, order []string) {
+	h.mu.Lock()
+	if h.saved.Order == nil {
+		h.saved.Order = map[string][]string{}
+	}
+	h.saved.Order[instanceID] = append([]string(nil), order...)
+	h.mu.Unlock()
+	h.save()
 }
 
 // SetLastInstance remembers which instance the panel showed.

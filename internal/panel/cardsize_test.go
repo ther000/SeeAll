@@ -55,9 +55,11 @@ func TestReadingsShareOneCardSize(t *testing.T) {
 		starts = append(starts, y)
 	}
 	sort.Slice(starts, func(i, j int) bool { return starts[i] < starts[j] })
-	// The rows are one card and one gap apart, so the cards are all one height.
-	if gap := starts[1] - starts[0]; gap != ReadingCardH+CardGap {
+	// The rows are one card and one row gap apart, so the cards are all one
+	// height. GridView spaces its rows by two units of the theme's spacing.
+	rowGap := float32(2) * gridGap
+	if gap := starts[1] - starts[0]; gap != ReadingCardH+rowGap {
 		t.Errorf("the rows are %v apart, want one card and one gap: %v",
-			gap, float32(ReadingCardH+CardGap))
+			gap, float32(ReadingCardH)+rowGap)
 	}
 }

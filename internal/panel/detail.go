@@ -29,21 +29,31 @@ func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 	m := in.Manifest()
 	snap := in.Snapshot()
 
-	ui.Scroll(c).Fill().Padding(CardGap, Gutter).Gap(CardGap).Children(func() {
+	// GridView insets its cells by 2 DIPs on each side of a page's column. The
+	// column gives that back, so a card's text starts on the panel's gutter
+	// whether the page is a grid of cards or one card with everything in it.
+	const gridInset = 2
+	ui.Column(c).Fill().Padding(CardGap, Gutter-gridInset).Gap(CardGap).Children(func() {
 		if m.Combined {
-			a.combined(c, p, in, snap)
-		} else {
-			a.cards(c, p, in, snap)
+			ui.Scroll(c).Fill().Gap(CardGap).Padding(0, gridInset).Children(func() {
+				a.combined(c, p, in, snap)
+				if m.Experimental {
+					ui.Row(c).Gap(8).Children(func() { badge(c, "实验", p.Warn) })
+				}
+			})
+			return
 		}
-		if m.Experimental {
-			ui.Row(c).Gap(8).Children(func() { badge(c, "实验", p.Warn) })
-		}
+		a.cards(c, p, in, snap)
 	})
 }
 
-// cards lays every reading out as a card of the same size, two to a row. The
-// reading a plugin leads with is one of them, at the head of the grid: a page
-// of one grid reads as a set of peers, which is what these readings are.
+// cards lays every reading out as a card of the same size, two to a row, in the
+// order the user dragged them into. The reading a plugin leads with starts at
+// the head of the grid the first time a page is seen: a page of one grid reads
+// as a set of peers, which is what these readings are.
+//
+// GridView drags its cells into another order (GridState.Reorder), which is
+// what the cards want: equal boxes in fixed rows.
 func (a *App) cards(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
 	if len(snap.Readings) == 0 {
 		a.heroEmpty(c, p, snap)
@@ -51,22 +61,58 @@ func (a *App) cards(c *ui.Context, p palette, in *app.Instance, snap core.Snapsh
 	}
 	primary, hasPrimary := pickPrimary(snap)
 
-	ordered := make([]core.Reading, 0, len(snap.Readings))
+	// The plugin's own order, the reading it leads with first.
+	natural := make([]core.Reading, 0, len(snap.Readings))
 	if hasPrimary {
-		ordered = append(ordered, primary)
+		natural = append(natural, primary)
 	}
 	for _, r := range snap.Readings {
 		if hasPrimary && r.ID == primary.ID {
 			continue
 		}
-		ordered = append(ordered, r)
+		natural = append(natural, r)
 	}
 
-	ui.Grid(c).Columns(cardsPerRow).Gap(CardGap).Children(func() {
-		for _, r := range ordered {
-			a.readingCard(c, p, in, r, hasPrimary && r.ID == primary.ID)
+	readings := arrangeOrders(natural, a.Host.CardOrder(in.ID))
+	lead := hasPrimary && readings[0].ID == primary.ID
+	state := a.gridState(in, readings)
+
+	// Two cards to a row: the grid gives each card half its width, less the
+	// gap between them.
+	width := a.Size.Width - 2*Gutter
+	half := float32(width)/cardsPerRow - CardGap/2
+	ui.GridView(c, state, len(readings), half, ReadingCardH, func(i int) {
+		a.readingCard(c, p, in, readings[i], lead && i == 0)
+	}).Grow(1).Shrink(1).Basis(0)
+}
+
+// gridState keeps one GridState per instance, remembering the order its cards
+// were dragged into.
+func (a *App) gridState(in *app.Instance, readings []core.Reading) *ui.GridState {
+	if a.grids == nil {
+		a.grids = map[string]*ui.GridState{}
+	}
+	state := a.grids[in.ID]
+	if state == nil {
+		state = &ui.GridState{}
+		a.grids[in.ID] = state
+	}
+	order := orderIDs(readings)
+	state.Key = func(item int) any {
+		if item < 0 || item >= len(order) {
+			return nil
 		}
-	})
+		return order[item]
+	}
+	state.Reorder = func(items []int, to int) {
+		if len(items) != 1 {
+			// The user chose several cards before dragging one; the page
+			// moves them as a block, in the order they already had.
+			return
+		}
+		a.Host.SetCardOrder(in.ID, moveCard(order, items[0], to))
+	}
+	return state
 }
 
 // combined is the page of a plugin whose readings describe one device: its
@@ -189,7 +235,7 @@ func pickPrimary(snap core.Snapshot) (core.Reading, bool) {
 //
 // lead marks the reading the plugin named: it is said larger, and its value is
 // not followed by a second line saying the same thing.
-func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Reading, lead bool) {
+func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Reading, lead bool) ui.Element {
 	valueColor := p.Text
 	if r.Severity != core.SeverityNone {
 		valueColor = p.severityColor(r.Severity)
@@ -198,7 +244,7 @@ func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Rea
 	if lead {
 		size = 28
 	}
-	card(c, p).Gap(2).Height(ReadingCardH).MaxHeight(ReadingCardH).Children(func() {
+	box := card(c, p).Gap(2).Height(ReadingCardH).MaxHeight(ReadingCardH).Children(func() {
 		// The label and the trend share the card's top row, the trend at its
 		// right, so the eye finds the shape of a value in the same place on
 		// every card.
@@ -214,6 +260,7 @@ func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Rea
 			ui.Text(c, r.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
 		}
 	})
+	return box
 }
 
 // trend draws the recent values of a reading as a sparkline in a box of the
@@ -264,4 +311,11 @@ func quietColor(p palette, s core.Severity) ui.Color {
 		return p.TextMuted
 	}
 	return p.severityColor(s)
+}
+
+func offsetY(p *ui.Point) int {
+	if p == nil {
+		return -999
+	}
+	return int(p.Y)
 }

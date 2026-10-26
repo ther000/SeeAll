@@ -21,6 +21,10 @@ const (
 	// cardRadius rounds cards; controlRadius rounds the controls on them.
 	cardRadius    = 12
 	controlRadius = 8
+	// gridGap is how far apart a page's cards sit, which is also the unit
+	// GridView spaces its cells by: it reads the theme's Spacing, which the
+	// palette sets to this.
+	gridGap float32 = 4
 	// ReadingCardH is the height of a reading's card on a page that puts one
 	// reading in each. Every card is that tall whether its reading has a line
 	// of detail under the value or not, so a grid of them is a grid and not a

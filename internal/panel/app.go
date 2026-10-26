@@ -31,6 +31,9 @@ type App struct {
 	confirmRemove string
 	// addChoice is the plugin the add card's select shows.
 	addChoice string
+	// grids keeps each instance's card grid, which remembers the order its
+	// cards were dragged into.
+	grids map[string]*ui.GridState
 }
 
 // New makes the panel's state.

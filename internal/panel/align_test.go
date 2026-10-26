@@ -38,8 +38,10 @@ func TestPagesShareOneGutter(t *testing.T) {
 		// right: a title on the left, a value or a control on the right.
 		left, right string
 	}{
-		{"mouse", "Rapoo Gaming Device", "无线"},
+		// The system page is the grid; it sets the lines. The mouse page's one
+		// card and the settings page's cards must land on them.
 		{"system", "CPU", "19.4 GB / 31.8 GB"},
+		{"mouse", "Rapoo Gaming Device", "无线"},
 		{SettingsPage, "应用", "全部刷新"},
 	}
 
