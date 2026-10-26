@@ -21,6 +21,11 @@ const (
 	// cardRadius rounds cards; controlRadius rounds the controls on them.
 	cardRadius    = 12
 	controlRadius = 8
+	// ReadingCardH is the height of a reading's card on a page that puts one
+	// reading in each. Every card is that tall whether its reading has a line
+	// of detail under the value or not, so a grid of them is a grid and not a
+	// set of cards of differing heights.
+	ReadingCardH = 96
 )
 
 // palette is SeeAll's look: one surface, one accent, and the three states

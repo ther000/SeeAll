@@ -23,8 +23,8 @@ const (
 )
 
 // detail is a monitor's page. A plugin whose readings belong together gets one
-// card with all of them; any other gets the reading that matters in the hero
-// card and every other reading as a card of its own under it.
+// card with all of them; any other gets a card per reading, all of them the
+// same size, two to a row.
 func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 	m := in.Manifest()
 	snap := in.Snapshot()
@@ -33,8 +33,7 @@ func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 		if m.Combined {
 			a.combined(c, p, in, snap)
 		} else {
-			a.hero(c, p, in, snap)
-			a.readings(c, p, in, snap)
+			a.cards(c, p, in, snap)
 		}
 		if m.Experimental {
 			ui.Row(c).Gap(8).Children(func() { badge(c, "实验", p.Warn) })
@@ -42,24 +41,31 @@ func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 	})
 }
 
-// hero is the card the page leads with: the ring for a percentage, the value
-// for anything else, and its trend beside it.
-func (a *App) hero(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
-	primary, ok := pickPrimary(snap)
-	if !ok {
+// cards lays every reading out as a card of the same size, two to a row. The
+// reading a plugin leads with is one of them, at the head of the grid: a page
+// of one grid reads as a set of peers, which is what these readings are.
+func (a *App) cards(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
+	if len(snap.Readings) == 0 {
 		a.heroEmpty(c, p, snap)
 		return
 	}
+	primary, hasPrimary := pickPrimary(snap)
 
-	card(c, p).Shrink(0).Children(func() {
-		ui.Row(c).Gap(4).AlignItems(ui.Baseline).Children(func() {
-			label(c, p, primary.Label)
-			ui.Spacer(c)
-			if primary.Detail != "" {
-				ui.Text(c, primary.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap()
-			}
-		})
-		a.heroValue(c, p, in, primary)
+	ordered := make([]core.Reading, 0, len(snap.Readings))
+	if hasPrimary {
+		ordered = append(ordered, primary)
+	}
+	for _, r := range snap.Readings {
+		if hasPrimary && r.ID == primary.ID {
+			continue
+		}
+		ordered = append(ordered, r)
+	}
+
+	ui.Grid(c).Columns(cardsPerRow).Gap(CardGap).Children(func() {
+		for _, r := range ordered {
+			a.readingCard(c, p, in, r, hasPrimary && r.ID == primary.ID)
+		}
 	})
 }
 
@@ -153,41 +159,6 @@ func (a *App) inlineReading(c *ui.Context, p palette, in *app.Instance, r core.R
 	})
 }
 
-// heroValue is the big number of a card: the ring for a percentage, the value
-// itself for anything else, with its trend and caption beside it.
-func (a *App) heroValue(c *ui.Context, p palette, in *app.Instance, primary core.Reading) {
-	ui.Row(c).AlignItems(ui.Center).Gap(14).Children(func() {
-		if primary.Unit == core.UnitPercent {
-			ui.Box(c).Size(118, 118).
-				Draw(func(pt *ui.Painter, r ui.Rect) {
-					drawRing(pt, r, p.Track, clamp01(primary.Value/100),
-						p.severityColor(primary.Severity), 11)
-				}).Children(func() {
-				ui.Column(c).Fill().Center().Children(func() {
-					ui.Row(c).AlignItems(ui.Baseline).Gap(1).Children(func() {
-						bigValue(c, core.FormatNumber(primary.Value), 36,
-							p.severityColor(primary.Severity))
-						ui.Text(c, "%").FontSize(14).TextColor(p.TextMuted)
-					})
-				})
-			})
-		} else {
-			bigValue(c, primary.Format(), 38, p.severityColor(primary.Severity))
-		}
-
-		ui.Column(c).Grow(1).Basis(0).Gap(6).Children(func() {
-			if caption := heroCaption(primary); caption != "" {
-				ui.Text(c, caption).FontSize(13).Wrap().
-					TextColor(p.severityColor(primary.Severity))
-			}
-			if history := in.History(primary.ID); varies(history) {
-				sparkline(c, p, history, quietColor(p, primary.Severity), 44)
-				label(c, p, "最近 "+historyWindow(in, primary.ID))
-			}
-		})
-	})
-}
-
 // heroEmpty is what a source with nothing to report shows: why, and what to
 // do about it.
 func (a *App) heroEmpty(c *ui.Context, p palette, snap core.Snapshot) {
@@ -212,35 +183,22 @@ func pickPrimary(snap core.Snapshot) (core.Reading, bool) {
 	return snap.Lead()
 }
 
-// readings lays every reading but the primary one out as a card, two to a row.
-// A page that fills up with them scrolls rather than folding any away: what a
-// monitor reports is the whole point of its page.
-func (a *App) readings(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
-	primary, _ := pickPrimary(snap)
-	var rest []core.Reading
-	for _, r := range snap.Readings {
-		if r.ID != primary.ID {
-			rest = append(rest, r)
-		}
-	}
-	if len(rest) == 0 {
-		return
-	}
-	ui.Grid(c).Columns(cardsPerRow).Gap(10).Children(func() {
-		for _, r := range rest {
-			a.readingCard(c, p, in, r)
-		}
-	})
-}
-
-// readingCard is one reading as a card: its label, its value in the size the
-// value deserves, whatever explains it, and its trend under them.
-func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Reading) {
+// readingCard is one reading as a card: its label and its trend across the top,
+// its value under them, and whatever explains the value at the foot. Every card
+// is the same height, so a row of them is a row.
+//
+// lead marks the reading the plugin named: it is said larger, and its value is
+// not followed by a second line saying the same thing.
+func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Reading, lead bool) {
 	valueColor := p.Text
 	if r.Severity != core.SeverityNone {
 		valueColor = p.severityColor(r.Severity)
 	}
-	card(c, p).Gap(2).MinHeight(96).Children(func() {
+	size := float32(22)
+	if lead {
+		size = 28
+	}
+	card(c, p).Gap(2).Height(ReadingCardH).MaxHeight(ReadingCardH).Children(func() {
 		// The label and the trend share the card's top row, the trend at its
 		// right, so the eye finds the shape of a value in the same place on
 		// every card.
@@ -251,7 +209,7 @@ func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Rea
 		})
 		// A value of words is set as the same size as a number: a card of
 		// "无线" beside a card of "1200" is one row of cards, not two.
-		ui.Text(c, r.Format()).FontSize(22).Bold().TextColor(valueColor).Wrap().MaxLines(2)
+		ui.Text(c, r.Format()).FontSize(size).Bold().TextColor(valueColor).Wrap().MaxLines(2)
 		if r.Detail != "" {
 			ui.Text(c, r.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
 		}
@@ -297,25 +255,6 @@ func intervalSeconds(in *app.Instance) int {
 		return 2
 	}
 	return 5
-}
-
-// heroCaption is the word beside the ring: for a battery, what its level
-// means; for anything else, nothing, since the reading already says what it
-// is.
-func heroCaption(r core.Reading) string {
-	if r.ID != "battery" {
-		return ""
-	}
-	switch {
-	case r.Value <= 10:
-		return "快没电了"
-	case r.Value <= 30:
-		return "该充电了"
-	case r.Value <= 60:
-		return "还够用"
-	default:
-		return "电量充足"
-	}
 }
 
 // quietColor is a reading's color for drawing: readings without a severity

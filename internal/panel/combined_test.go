@@ -106,8 +106,8 @@ func TestCombinedPageShowsNoTrendOrWording(t *testing.T) {
 }
 
 // TestEveryOtherPageKeepsItsCards checks the combined page is the plugin's
-// choice: a plugin whose readings measure different things still gets a card
-// each.
+// choice: a plugin whose readings measure different things gets a card each,
+// two to a row, all of them the same size.
 func TestEveryOtherPageKeepsItsCards(t *testing.T) {
 	h, p := fixture(t)
 	h.Inject("system", core.Snapshot{Status: core.StatusOK, Title: "DESKTOP",
@@ -120,6 +120,12 @@ func TestEveryOtherPageKeepsItsCards(t *testing.T) {
 	p.SetSize(Fit(1920, 1040, 1))
 	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
 
+	// The led reading comes first, so it and the one after it share the first
+	// row, and the third starts the second.
+	cpu, ok := tt.Find("CPU")
+	if !ok {
+		t.Fatalf("the system page shows no CPU reading: %v", tt.Texts())
+	}
 	mem, ok := tt.Find("内存")
 	if !ok {
 		t.Fatalf("the system page shows no memory reading: %v", tt.Texts())
@@ -128,11 +134,16 @@ func TestEveryOtherPageKeepsItsCards(t *testing.T) {
 	if !ok {
 		t.Fatalf("the system page shows no disk reading: %v", tt.Texts())
 	}
-	// Two cards in a row sit side by side; one card would stack them.
-	if mem.Y != disk.Y {
-		t.Errorf("内存 at y=%v and 磁盘 at y=%v are not a row of cards", mem.Y, disk.Y)
+	if cpu.Y != mem.Y {
+		t.Errorf("CPU at y=%v and 内存 at y=%v are not a row of cards", cpu.Y, mem.Y)
 	}
-	if disk.X <= mem.X {
-		t.Errorf("磁盘 at x=%v is not beside 内存 at x=%v", disk.X, mem.X)
+	if mem.X <= cpu.X {
+		t.Errorf("内存 at x=%v is not beside CPU at x=%v", mem.X, cpu.X)
+	}
+	if disk.Y <= cpu.Y {
+		t.Errorf("磁盘 at y=%v did not start a new row under CPU at y=%v", disk.Y, cpu.Y)
+	}
+	if disk.X != cpu.X {
+		t.Errorf("磁盘 at x=%v does not start the row at CPU's x=%v", disk.X, cpu.X)
 	}
 }

@@ -4,7 +4,28 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"seeall/internal/core"
 )
+
+// alignedFixture makes a host with both monitors reporting the readings this
+// test expects, so that the page it measures is the page it described.
+func alignedFixture(t *testing.T) (*App, func(row string) *ui.Tester) {
+	t.Helper()
+	h, p := fixture(t)
+	h.Inject("system", core.Snapshot{Status: core.StatusOK, Title: "DESKTOP",
+		Primary: "cpu", Readings: []core.Reading{
+			{ID: "cpu", Label: "CPU", Value: 23.4, Unit: core.UnitPercent,
+				Severity: core.SeverityOK, Detail: "16 核"},
+			{ID: "mem", Label: "内存", Value: 61, Unit: core.UnitPercent,
+				Severity: core.SeverityOK, Detail: "19.4 GB / 31.8 GB"},
+		}})
+	p.SetSize(Fit(1920, 1040, 1))
+	return p, func(row string) *ui.Tester {
+		p.SetSelected(row)
+		return ui.NewTester(func(c *ui.Context) { p.View(c) }, DesignWidth, DesignHeight)
+	}
+}
 
 // TestPagesShareOneGutter checks the panel's pages line up with one another:
 // the text at the left edge of a card and the text at its right edge sit on the
@@ -18,17 +39,16 @@ func TestPagesShareOneGutter(t *testing.T) {
 		left, right string
 	}{
 		{"mouse", "Rapoo Gaming Device", "无线"},
-		{"system", "CPU", "16 核"},
+		{"system", "CPU", "19.4 GB / 31.8 GB"},
 		{SettingsPage, "应用", "全部刷新"},
 	}
 
 	// The first page sets the lines; the others must land on them.
 	var wantLeft, wantRight float32
 	for i, page := range pages {
-		_, p := fixture(t)
-		p.SetSize(Fit(1920, 1040, 1))
-		p.SetSelected(page.row)
-		tt := ui.NewTester(func(c *ui.Context) { p.View(c) }, DesignWidth, DesignHeight)
+		p, tester := alignedFixture(t)
+		_ = p
+		tt := tester(page.row)
 
 		left, ok := tt.Find(page.left)
 		if !ok {
