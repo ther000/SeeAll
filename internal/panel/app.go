@@ -2,9 +2,7 @@ package panel
 
 import (
 	"sort"
-	"strconv"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"seeall/internal/app"
@@ -72,8 +70,8 @@ func (a *App) SetSelected(id string) {
 	}
 }
 
-// View builds the panel: a title bar, the tabs that choose what it shows, the
-// page, and a status bar at its foot.
+// View builds the panel: a title bar, the tabs that choose what it shows, and
+// the page.
 func (a *App) View(c *ui.Context) {
 	p := paletteFor(c)
 	a.handleKeys(c)
@@ -96,7 +94,6 @@ func (a *App) View(c *ui.Context) {
 				}
 			}
 		})
-		a.footer(c, p, instances)
 	})
 }
 
@@ -177,39 +174,6 @@ func (a *App) tabButton(c *ui.Context, p palette, tab ui.Element, on bool, icon 
 		}
 	})
 	return tab
-}
-
-// footer is the status bar: what the page above it last did, on the left, and
-// the two things that leave the panel on the right.
-func (a *App) footer(c *ui.Context, p palette, instances []*app.Instance) {
-	ui.Box(c).Shrink(0).Height(1).Background(p.CardBorder)
-	ui.Row(c).Shrink(0).Padding(14, 7).Gap(2).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, a.statusLine(instances)).FontSize(11).TextColor(p.TextMuted).
-			Grow(1).NoWrap().MaxLines(1)
-		if ui.Button(c, "").Label("日志").Description("打开日志").Tooltip("打开日志").Children(func() {
-			ui.Text(c, "日志").FontSize(11).SingleLine()
-		}).Clicked() {
-			openLog()
-		}
-		if ui.Button(c, "").Label("退出").Description("退出 SeeAll").Tooltip("退出").Children(func() {
-			ui.Text(c, "退出").FontSize(11).SingleLine()
-		}).Clicked() {
-			mygo.App.Quit()
-		}
-	})
-}
-
-// statusLine says what the footer says about the page above it.
-func (a *App) statusLine(instances []*app.Instance) string {
-	if a.Selected() == SettingsPage {
-		return strconv.Itoa(len(instances)) + " 个监控项 · " +
-			strconv.Itoa(len(a.Host.Plugins())) + " 个插件"
-	}
-	in := a.Host.Instance(a.Selected())
-	if in == nil {
-		return "没有监控项"
-	}
-	return updatedText(in.Snapshot())
 }
 
 // ensureSelection keeps the panel on a row that exists: a monitor the user

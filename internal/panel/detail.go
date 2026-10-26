@@ -189,13 +189,6 @@ func (a *App) disclosure(c *ui.Context, p palette, label string) ui.Element {
 	return row
 }
 
-func updatedText(snap core.Snapshot) string {
-	if snap.At.IsZero() {
-		return "还没有数据"
-	}
-	return core.FormatDuration(time.Since(snap.At)) + "更新"
-}
-
 func historyWindow(in *app.Instance, readingID string) string {
 	n := len(in.History(readingID))
 	seconds := intervalSeconds(in)

@@ -65,11 +65,6 @@ func main() {
 	s.host.Logf = func(format string, args ...any) { log.Printf(format, args...) }
 	s.panel = panel.New(s.host)
 	s.panel.Select = func(string) { s.refresh() }
-	panel.OpenLog = func() {
-		if dir, err := mygo.App.Path(mygo.PathLogs); err == nil {
-			mygo.Shell.ShowItemInFolder(filepath.Join(dir, "seeall.log"))
-		}
-	}
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		s.quitting = true

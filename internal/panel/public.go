@@ -12,12 +12,6 @@ import (
 // tray menu uses it to open them.
 const SettingsPage = "@settings"
 
-// OpenLog opens the log file, as the status bar's button does. The app sets
-// it once it knows where the file is.
-var OpenLog = func() {}
-
-func openLog() { OpenLog() }
-
 // Content returns the window's content for a panel: the view MyGo calls to
 // build each frame.
 func Content(a *App) *ui.Content {

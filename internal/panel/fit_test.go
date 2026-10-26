@@ -87,10 +87,18 @@ func TestMarginDIP(t *testing.T) {
 }
 
 // TestFitFitsEveryPage renders each page at the sizes Fit gives a display and
-// checks that the status bar — the last thing in every window — and the tab
-// row are inside it. A page whose content outgrows the panel clips it, which
-// is what the fixed-size layout has to prevent.
+// checks its skeleton: the title bar on top, the tabs under it, the page under
+// them, all inside the window. A header pushed off the top or a tab row below
+// the fold is what the fixed-size layout has to prevent.
 func TestFitFitsEveryPage(t *testing.T) {
+	pages := []struct {
+		row     string
+		content string
+	}{
+		{"mouse", "电量"},
+		{"system", "CPU"},
+		{SettingsPage, "应用"},
+	}
 	for _, area := range []struct {
 		name  string
 		w, h  int
@@ -100,24 +108,40 @@ func TestFitFitsEveryPage(t *testing.T) {
 		{"laptop", 1358, 720, 1},
 	} {
 		m := Fit(area.w, area.h, area.scale)
-		for _, row := range []string{"mouse", "system", SettingsPage} {
+		for _, page := range pages {
 			h, _ := fixture(t)
 			p := New(h)
 			p.SetSize(m)
-			p.SetSelected(row)
+			p.SetSelected(page.row)
 
 			tt := ui.NewTester(p.View, m.Width, m.Height)
-			r, ok := tt.Find("退出")
+			title, ok := tt.Find("SeeAll")
 			if !ok {
-				t.Fatalf("%s/%s: the status bar is missing", area.name, row)
+				t.Fatalf("%s/%s: the title bar is missing: %v", area.name, page.row, tt.Texts())
 			}
-			if r.Y+r.H > float32(m.Height) {
-				t.Errorf("%s/%s: the status bar is clipped (bottom %v of %d)",
-					area.name, row, r.Y+r.H, m.Height)
+			if title.Y > 40 {
+				t.Errorf("%s/%s: the title bar sits at y=%v, not at the top",
+					area.name, page.row, title.Y)
 			}
-			if r.Y < float32(m.Height)*0.8 {
-				t.Errorf("%s/%s: the status bar sits at y=%v, not at the foot of %d",
-					area.name, row, r.Y, m.Height)
+			tabs, ok := tt.Find("本机")
+			if !ok {
+				t.Fatalf("%s/%s: the tab row is missing: %v", area.name, page.row, tt.Texts())
+			}
+			if tabs.Y <= title.Y+title.H {
+				t.Errorf("%s/%s: the tabs at y=%v overlap the title bar at y=%v",
+					area.name, page.row, tabs.Y, title.Y)
+			}
+			content, ok := tt.Find(page.content)
+			if !ok {
+				t.Fatalf("%s/%s: %q is missing: %v", area.name, page.row, page.content, tt.Texts())
+			}
+			if content.Y <= tabs.Y {
+				t.Errorf("%s/%s: the page content at y=%v sits above the tabs at y=%v",
+					area.name, page.row, content.Y, tabs.Y)
+			}
+			if content.Y > float32(m.Height) {
+				t.Errorf("%s/%s: the page starts below the window (y=%v of %d)",
+					area.name, page.row, content.Y, m.Height)
 			}
 		}
 	}
