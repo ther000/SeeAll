@@ -134,13 +134,25 @@ func (a *App) tabs(c *ui.Context, p palette, instances []*app.Instance) {
 		// The settings are not a tab, so none of them is lit while they
 		// show: a lit tab would claim a page that is not on screen.
 		lit := a.Selected() != SettingsPage
+		clicked := -1
 		tabs.List.FillWidth().Gap(4).Children(func() {
 			for i, in := range items {
-				a.tabButton(c, p, tabs.Tab(i), lit && i == a.tab,
+				tab := a.tabButton(c, p, tabs.Tab(i), lit && i == a.tab,
 					iconFor(in.Manifest().Icon), in.Name, in.Snapshot().Status)
+				// A click chooses the tab even when it is the one the list
+				// already holds, which is what makes a page opened from
+				// outside the tabs — the settings — clickable back: the tab
+				// list reports no change, since its choice never moved.
+				if tab.Clicked() {
+					clicked = i
+				}
 			}
 		})
-		if tabs.List.Changed() && a.tab < len(items) {
+		switch {
+		case clicked >= 0:
+			a.SetSelected(items[clicked].ID)
+		case tabs.List.Changed() && a.tab < len(items):
+			// The arrows and Home and End choose without clicking.
 			a.SetSelected(items[a.tab].ID)
 		}
 	})
@@ -149,7 +161,7 @@ func (a *App) tabs(c *ui.Context, p palette, instances []*app.Instance) {
 // tabButton draws one tab: its icon, its name, and the dot that says whether
 // the monitor behind it is fine, which the page cannot show for the tabs it is
 // not on.
-func (a *App) tabButton(c *ui.Context, p palette, tab ui.Element, on bool, icon *ui.SVG, name string, status core.Status) {
+func (a *App) tabButton(c *ui.Context, p palette, tab ui.Element, on bool, icon *ui.SVG, name string, status core.Status) ui.Element {
 	tab.Grow(1).Basis(0).Justify(ui.Center).Padding(7, 8).Radius(8).
 		Gap(5).AlignItems(ui.Center).FocusRing(false)
 	if on {
@@ -164,6 +176,7 @@ func (a *App) tabButton(c *ui.Context, p palette, tab ui.Element, on bool, icon 
 			dot(c, p.statusColor(status), 6)
 		}
 	})
+	return tab
 }
 
 // footer is the status bar: what the page above it last did, on the left, and

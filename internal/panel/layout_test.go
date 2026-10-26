@@ -99,6 +99,27 @@ func TestTabsChooseThePage(t *testing.T) {
 		t.Fatalf("selected %q, want the settings", p.Selected())
 	}
 
+	// The settings leave the tab list's own choice where it was, so the tab
+	// of the monitor shown last must still bring its page back: a click is a
+	// click even when the tab already holds the choice.
+	if err := tt.Click("鼠标"); err != nil {
+		t.Fatal(err)
+	}
+	if p.Selected() != "mouse" {
+		t.Fatalf("selected %q after the settings, want mouse", p.Selected())
+	}
+
+	// The same for the other monitor, which is the tab that is not chosen.
+	if err := tt.Click("打开设置"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("本机"); err != nil {
+		t.Fatal(err)
+	}
+	if p.Selected() != "system" {
+		t.Fatalf("selected %q after the settings, want system", p.Selected())
+	}
+
 	// Chosen from the tray menu, the tabs must point at the page shown.
 	p.SetSelected("system")
 	tt2 := ui.NewTester(p.View, DesignWidth, DesignHeight)
