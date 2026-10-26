@@ -156,13 +156,9 @@ func (a *App) sidebar(c *ui.Context, p palette, instances []*app.Instance) {
 // sorted puts the monitors in a stable order: by kind, then by name, so the
 // sidebar does not jump as snapshots arrive.
 func (a *App) sorted(instances []*app.Instance) []*app.Instance {
-	order := map[plugin.Kind]int{
-		plugin.KindDevice: 0,
-		plugin.KindSystem: 1,
-	}
 	out := append([]*app.Instance(nil), instances...)
 	sort.SliceStable(out, func(i, j int) bool {
-		ki, kj := order[out[i].Manifest().Kind], order[out[j].Manifest().Kind]
+		ki, kj := out[i].Manifest().Kind.Order(), out[j].Manifest().Kind.Order()
 		if ki != kj {
 			return ki < kj
 		}

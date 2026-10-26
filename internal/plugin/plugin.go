@@ -28,6 +28,18 @@ const (
 	KindAgent Kind = "agent"
 )
 
+// Order sorts the kinds the way the sidebar does: the hardware first, then
+// the machine it runs on, then anything else a plugin adds.
+func (k Kind) Order() int {
+	switch k {
+	case KindDevice:
+		return 0
+	case KindSystem:
+		return 1
+	}
+	return 2
+}
+
 // String names the kind for people.
 func (k Kind) String() string {
 	switch k {

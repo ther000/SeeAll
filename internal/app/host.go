@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -366,22 +365,6 @@ func readingRank(r core.Reading) int {
 		rank += 5
 	}
 	return rank
-}
-
-// Kinds returns the plugin kinds in sidebar order.
-func Kinds(instances []*Instance) []plugin.Kind {
-	seen := map[plugin.Kind]bool{}
-	var out []plugin.Kind
-	for _, order := range []plugin.Kind{plugin.KindDevice, plugin.KindSystem} {
-		for _, in := range instances {
-			if in.Manifest().Kind == order && !seen[order] {
-				seen[order] = true
-				out = append(out, order)
-			}
-		}
-	}
-	sort.SliceStable(out, func(i, j int) bool { return false })
-	return out
 }
 
 // ---- settings file ----
