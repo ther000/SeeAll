@@ -16,7 +16,7 @@ func Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		ID:              "system",
 		Name:            "本机",
-		Summary:         "CPU、内存、磁盘、电池与开机时长",
+		Summary:         "CPU、内存、磁盘、电池、网络、GPU 与开机时长",
 		Kind:            plugin.KindSystem,
 		Icon:            "cpu",
 		DefaultInstance: "本机",
@@ -131,12 +131,40 @@ func (in *instance) collect() {
 			in.notified = false
 		}
 	}
+	// The network's rates are a flow, not a level: they are written as words
+	// because "12.3 KB/s" is read at a glance and a number with a unit is not.
+	readings = append(readings,
+		core.Reading{
+			ID: "net-down", Label: "下载", Text: core.FormatBytes(m.NetRxRate) + "/s",
+			Severity: core.SeverityNone, Detail: "全部网卡",
+		},
+		core.Reading{
+			ID: "net-up", Label: "上传", Text: core.FormatBytes(m.NetTxRate) + "/s",
+			Severity: core.SeverityNone,
+		},
+	)
+	if m.HasGPU {
+		readings = append(readings, core.Reading{
+			ID: "gpu", Label: "GPU", Value: m.GPUPercent, Unit: core.UnitPercent,
+			Severity: loadSeverity(m.GPUPercent), Detail: "各引擎合计",
+		})
+		if m.VRAMTotal > 0 && m.VRAMUsed > 0 {
+			readings = append(readings, core.Reading{
+				ID: "vram", Label: "显存", Value: 100 * m.VRAMUsed / m.VRAMTotal,
+				Unit:     core.UnitPercent,
+				Severity: loadSeverity(100 * m.VRAMUsed / m.VRAMTotal),
+				Detail:   core.FormatBytes(m.VRAMUsed) + " / " + core.FormatBytes(m.VRAMTotal),
+			})
+		}
+	}
+
 	readings = append(readings, core.Reading{
 		ID: "uptime", Label: "开机", Text: core.FormatMillis(float64(m.Uptime / time.Millisecond)),
 		Severity: core.SeverityNone,
 	})
 
-	if m.CPUPercent >= 90 || m.MemUsedPercent >= 92 {
+	switch {
+	case m.CPUPercent >= 90, m.MemUsedPercent >= 92, m.GPUPercent >= 95:
 		status = core.StatusWarn
 	}
 

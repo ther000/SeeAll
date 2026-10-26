@@ -126,9 +126,19 @@ func fixture(size panel.Metrics) (*app.Host, *panel.App) {
 				Severity: core.SeverityWarn, Detail: "212 GB 可用 / 953 GB"},
 			{ID: "battery", Label: "电池", Value: 84, Unit: core.UnitPercent,
 				Severity: core.SeverityOK, Detail: "3 小时后续航"},
+			{ID: "net-down", Label: "下载", Text: "2.1 MB/s", Severity: core.SeverityNone,
+				Detail: "全部网卡"},
+			{ID: "net-up", Label: "上传", Text: "320 KB/s", Severity: core.SeverityNone},
+			{ID: "gpu", Label: "GPU", Value: 34.2, Unit: core.UnitPercent,
+				Severity: core.SeverityOK, Detail: "各引擎合计"},
+			{ID: "vram", Label: "显存", Value: 42, Unit: core.UnitPercent,
+				Severity: core.SeverityOK, Detail: "2.7 GB / 6 GB"},
 			{ID: "uptime", Label: "开机", Text: "2.4 h", Severity: core.SeverityNone},
 		},
-	}, map[string][]float64{"cpu": wave(23, 18, 9, 6), "mem": wave(61, 18, 4, 11)})
+	}, map[string][]float64{
+		"cpu": wave(23, 18, 9, 6), "mem": wave(61, 18, 4, 11),
+		"gpu": wave(34, 18, 14, 4), "vram": wave(42, 18, 3, 8),
+	})
 
 	p := panel.New(host)
 	p.SetSize(size)

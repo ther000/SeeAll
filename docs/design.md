@@ -120,7 +120,8 @@ Height = round(840 / scale)
   - 默认：每个读数一张卡（`ui.Grid` 两列），**全部等高**（`ReadingCardH`，`Height` +
     `MaxHeight` 夹死，所以有没有说明行都是同一个高度）。卡里标签和折线共用顶行
     （折线居右，`trendWidth`×`trendHeight` 的固定位置，没有折线也占位），下面依次是值与说明。
-    插件指定的主读数排第一张，字号大一号。适合读数在量不同东西的页面（本机：CPU、内存、磁盘）。
+    插件指定的主读数排第一张，字号大一号。适合读数在量不同东西的页面（本机：CPU、内存、磁盘、
+    网络上下行、GPU、显存）。
   - `Combined`：整页一张卡——设备名（`Snapshot.Title`）横在顶部，主读数（`headline`，只有环或数字）
     在左，其余读数（`inlineReading`，「标签 … 值」一行一条）在右。不画折线、不写 caption：
     环和数字已经说完了。适合读数描述同一个东西的页面（鼠标：电量、连接、DPI）。
@@ -163,6 +164,14 @@ Height = round(840 / scale)
 - 雷柏接收器**没有读回通道**：除状态帧里的 DPI，写进去的参数无法确认。
   SeeAll 这一版只读不写，不做「你以为写进去了」的显示。
 - HID 读取只有 Windows 实现，其他平台编译通过但鼠标插件报没有通道。
+- 网络速率、GPU 占用与显存只有 Windows 实现：它们走 `pdh.dll` 的性能计数器
+  （`\Network Interface(*)\Bytes Received/sec`、`\GPU Engine(*)\Utilization Percentage`、
+  `\GPU Local Adapter Memory(*)\Local Usage`）。其他平台的 `sampler` 不填这几项，
+  插件就不报对应的读数。
+- 显存总量取自注册表 `HardwareInformation.qwMemorySize`：WMI 的 `AdapterRAM` 是 32 位，
+  超过 4 GB 的卡会回绕（本机 6 GB 的 3060 会被报成 4 GB）。
+- GPU 占用是各引擎利用率的**求和**（与任务管理器一致），不是平均值；虚拟显示适配器
+  没有引擎数据，不会参与。
 - 自带只有鼠标和本机两个插件：插件化是给后续监控对象留的口子，不是一次塞满托盘。
 
 ## 验证过的事

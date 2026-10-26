@@ -26,6 +26,20 @@ var (
 	procGetTickCount64       = kernel32.NewProc("GetTickCount64")
 )
 
+var advapi32 = syscall.NewLazyDLL("advapi32.dll")
+
+var (
+	procRegOpenKeyEx    = advapi32.NewProc("RegOpenKeyExW")
+	procRegEnumKeyEx    = advapi32.NewProc("RegEnumKeyExW")
+	procRegQueryValueEx = advapi32.NewProc("RegQueryValueExW")
+	procRegCloseKey     = advapi32.NewProc("RegCloseKey")
+)
+
+const (
+	hkeyLocalMachine = 0x80000002
+	keyRead          = 0x00020019
+)
+
 type memoryStatusEx struct {
 	Length               uint32
 	MemoryLoad           uint32
@@ -52,10 +66,52 @@ type sampler struct {
 	prevTotal uint64
 	cpu       float64
 	havePrev  bool
+
+	// perf holds the counters kernel32 does not have: the network's rates and
+	// the graphics processor's load and memory. Its counters are collected
+	// once on init so that the first sample has a rate to report.
+	perf    *pdhQuery
+	netRx   *pdhCounter
+	netTx   *pdhCounter
+	gpuUtil *pdhCounter
+	vram    *pdhCounter
+	// vramTotal is the adapter's memory, read from the registry once.
+	vramTotal float64
 }
 
 func (s *sampler) init() {
 	s.sampleCPU()
+	s.initPerf()
+}
+
+// initPerf opens the performance counters and takes the first reading of each
+// rate counter, which PDH needs before it can report a rate.
+func (s *sampler) initPerf() {
+	q := openQuery()
+	if q == nil {
+		return
+	}
+	// Every interface is summed, so the rates cover the machine rather than
+	// one adapter the user may not be using.
+	if q.add(`\Network Interface(*)\Bytes Received/sec`, true) {
+		s.netRx = q.counters[len(q.counters)-1]
+	}
+	if q.add(`\Network Interface(*)\Bytes Sent/sec`, true) {
+		s.netTx = q.counters[len(q.counters)-1]
+	}
+	if q.add(`\GPU Engine(*)\Utilization Percentage`, true) {
+		s.gpuUtil = q.counters[len(q.counters)-1]
+	}
+	if q.add(`\GPU Local Adapter Memory(*)\Local Usage`, true) {
+		s.vram = q.counters[len(q.counters)-1]
+	}
+	if len(q.counters) == 0 {
+		q.close()
+		return
+	}
+	s.perf = q
+	s.vramTotal = adapterMemory()
+	q.refresh()
 }
 
 // sampleCPU reads the processor's total and idle time since boot, and turns
@@ -94,6 +150,7 @@ func (s *sampler) sampleCPU() {
 
 func (s *sampler) sample(disk string) metrics {
 	s.sampleCPU()
+	net, gpu, gpuOK := s.samplePerf()
 
 	m := metrics{
 		Hostname:       hostname(),
@@ -143,7 +200,71 @@ func (s *sampler) sample(disk string) metrics {
 	if ticks, _, _ := procGetTickCount64.Call(); ticks != 0 {
 		m.Uptime = time.Duration(ticks) * time.Millisecond
 	}
+
+	m.NetRxRate, m.NetTxRate = net[0], net[1]
+	m.HasGPU = gpuOK
+	m.GPUPercent, m.VRAMUsed, m.VRAMTotal = gpu[0], gpu[1], gpu[2]
 	return m
+}
+
+// samplePerf reads the performance counters and turns them into the network
+// rates and the graphics numbers.
+func (s *sampler) samplePerf() (net [2]float64, gpu [3]float64, gpuOK bool) {
+	if s.perf == nil || !s.perf.refresh() {
+		return net, gpu, false
+	}
+
+	// Every interface is summed, adapters the user is not using included: the
+	// panel answers "how fast is this machine talking", not "how fast is one
+	// adapter". A disconnected adapter reports nothing.
+	net[0] = sum(s.perf.instances(s.netRx))
+	net[1] = sum(s.perf.instances(s.netTx))
+
+	// The engines of a graphics processor each report their own utilization,
+	// and Task Manager's number is their sum. Loopback and software engines
+	// are not work the GPU did.
+	engines := s.perf.instances(s.gpuUtil)
+	if len(engines) > 0 {
+		gpuOK = true
+		gpu[0] = clampPercent(sum(engines))
+	}
+	// A virtual display adapter sits beside the real one and reports nothing,
+	// so the adapter with the most memory in use is the one to show.
+	used := maxOf(s.perf.instances(s.vram))
+	if used > 0 && s.vramTotal > 0 {
+		gpuOK = true
+		gpu[1] = used
+		gpu[2] = s.vramTotal
+	}
+	return net, gpu, gpuOK
+}
+
+func sum(values []float64) float64 {
+	var total float64
+	for _, v := range values {
+		total += v
+	}
+	return total
+}
+
+func maxOf(values []float64) float64 {
+	var best float64
+	for _, v := range values {
+		if v > best {
+			best = v
+		}
+	}
+	return best
+}
+
+func clampPercent(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }
 
 func hostname() string {
