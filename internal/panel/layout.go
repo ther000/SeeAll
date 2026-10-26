@@ -1,47 +1,42 @@
 package panel
 
-// Metrics is the panel's size, worked out from the work area it docks into.
+// The panel is one column at a fixed aspect ratio: a title bar, a row of tabs
+// that choose the monitor, the page, and a status bar at the foot.
+const (
+	// DesignWidth and DesignHeight are the panel's proportions, not a fixed
+	// size: a display too small for the design gets a smaller panel of the
+	// same shape.
+	DesignWidth, DesignHeight = 660, 840
+)
+
+// Metrics is the panel's size, worked out from the room it may fill.
 type Metrics struct {
 	// Width and Height of the window, in DIPs.
 	Width, Height int
-	// Sidebar is the width of the monitor list.
-	Sidebar int
 }
 
-// Fit sizes the panel for a work area.
+// Fit sizes the panel for the room it may fill: the largest window of the
+// design's proportions that fits, so the layout is the same shape on every
+// display and only its scale changes.
 //
-// The panel is docked against the right edge of the screen, on top of the
-// taskbar, and it is a dashboard rather than a popover: wide enough for two
-// columns of readings on a desktop display, narrower on a laptop.
-func Fit(workWidth, workHeight int) Metrics {
-	const (
-		minWidth, maxWidth   = 560, 920
-		minHeight, maxHeight = 560, 680
-	)
-	m := Metrics{
-		Width:   clampInt(workWidth*42/100, minWidth, maxWidth),
-		Height:  clampInt(workHeight*58/100, minHeight, maxHeight),
-		Sidebar: 184,
+// The size is worked out once and kept: switching tabs or reopening the panel
+// does not resize it, and a page longer than it scrolls.
+func Fit(availWidth, availHeight int) Metrics {
+	width, height := DesignWidth, DesignHeight
+	if availHeight > 0 && height > availHeight {
+		height = availHeight
+		width = height * DesignWidth / DesignHeight
 	}
-	if m.Width > workWidth {
-		m.Width = workWidth
+	if availWidth > 0 && width > availWidth {
+		width = availWidth
+		height = width * DesignHeight / DesignWidth
 	}
-	if m.Height > workHeight {
-		m.Height = workHeight
-	}
-	// A narrow panel gives up some of the list before the page.
-	if m.Width < 660 {
-		m.Sidebar = clampInt(m.Width*31/100, 128, 184)
-	}
-	return m
+	return Metrics{Width: maxInt(width, 1), Height: maxInt(height, 1)}
 }
 
-func clampInt(v, lo, hi int) int {
-	if v < lo {
-		return lo
+func maxInt(a, b int) int {
+	if a > b {
+		return a
 	}
-	if v > hi {
-		return hi
-	}
-	return v
+	return b
 }

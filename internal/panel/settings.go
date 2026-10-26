@@ -15,10 +15,8 @@ import (
 // settings is the panel's settings page: which monitors run, what each one
 // watches, and how the app itself behaves.
 func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
-	a.header(c, p, "设置", fmt.Sprintf("%d 个监控项 · %d 个插件",
-		len(instances), len(a.Host.Plugins())), emptySnap(), false)
-
-	ui.Scroll(c).Grow(1).Shrink(1).Basis(0).Padding(16, 2, 16, 14).Gap(10).Children(func() {
+	ui.Scroll(c).Fill().Padding(16, 6, 16, 14).Gap(10).Children(func() {
+		ui.Text(c, "设置").FontSize(13).Bold()
 		card(c, p).Children(func() {
 			label(c, p, "应用")
 			ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {

@@ -6,15 +6,6 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// ring draws a percentage as an arc: the track first, then the filled part,
-// from twelve o'clock clockwise.
-func ring(c *ui.Context, p palette, value float64, color ui.Color, width float32) ui.Element {
-	v := clamp01(value / 100)
-	return ui.Box(c).Fill().Draw(func(pt *ui.Painter, r ui.Rect) {
-		drawRing(pt, r, p.Track, v, color, width)
-	})
-}
-
 // drawRing paints the track and the lit part of a ring in r.
 func drawRing(pt *ui.Painter, r ui.Rect, track ui.Color, v float64, color ui.Color, width float32) {
 	size := min32(r.W, r.H)
@@ -79,12 +70,6 @@ func card(c *ui.Context, p palette) ui.Element {
 		Background(p.Card).Border(1, p.CardBorder)
 }
 
-// panelCard is a card that fills the room its column gives it, for the pages
-// that hold two of them side by side.
-func panelCard(c *ui.Context, p palette) ui.Element {
-	return card(c, p).FillHeight().Grow(1)
-}
-
 // sparkline draws the recent values of a reading as a small line, with the
 // newest point marked.
 func sparkline(c *ui.Context, p palette, values []float64, color ui.Color, height float32) ui.Element {
@@ -118,19 +103,22 @@ func sparkline(c *ui.Context, p palette, values []float64, color ui.Color, heigh
 	})
 }
 
-// meter is a rounded bar filled to a share of its width.
-func meter(c *ui.Context, p palette, share float64, color ui.Color, height float32) ui.Element {
-	return ui.Box(c).Height(height).Draw(func(pt *ui.Painter, r ui.Rect) {
-		pt.Fill(r, p.Track, height/2)
-		w := float32(clamp01(share)) * r.W
-		if w <= 0 {
-			return
+// varies reports whether a history is worth a sparkline: enough points, and
+// something other than a flat line.
+func varies(values []float64) bool {
+	if len(values) < 4 {
+		return false
+	}
+	lo, hi := values[0], values[0]
+	for _, v := range values {
+		if v < lo {
+			lo = v
 		}
-		if w < height {
-			w = height
+		if v > hi {
+			hi = v
 		}
-		pt.Fill(ui.Rect{X: r.X, Y: r.Y, W: w, H: r.H}, color, height/2)
-	})
+	}
+	return hi-lo > 1e-9
 }
 
 // badge is a small pill, used for a source's status word.

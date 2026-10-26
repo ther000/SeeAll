@@ -10,40 +10,28 @@ import (
 	"seeall/internal/core"
 )
 
-// maxTiles caps the readings a page shows as tiles. A plugin reporting a
-// dozen of them would push the page past the window.
-const maxTiles = 6
+// maxRows is how many readings a page lists before it folds the rest behind
+// a "显示其余 N 个" row, as a list that fills the panel would otherwise push
+// past its foot.
+const maxRows = 4
 
-// detail is a monitor's page, laid out as a dashboard: the value that
-// matters across the top as a hero card, the other readings as tiles under it
-// two to a row, and what the source last did pinned at the foot.
+// detail is a monitor's page: the reading that matters in a card at the top,
+// and every other reading below it as a row of one list.
 func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 	m := in.Manifest()
 	snap := in.Snapshot()
 
-	ui.Column(c).Fill().Children(func() {
-		a.header(c, p, in.Name, snap.Subtitle, snap, true)
-		// The cards are centered in the room a short page leaves: a page
-		// with two readings looks laid out rather than half empty.
-		ui.Scroll(c).Grow(1).Shrink(1).Basis(0).Justify(ui.Center).
-			Padding(18, 2, 18, 12).Gap(12).Children(func() {
-			a.hero(c, p, in, snap)
-			a.readings(c, p, in, snap)
-		})
-		ui.Row(c).Shrink(0).Padding(18, 0, 18, 14).Gap(8).AlignItems(ui.Center).Children(func() {
-			if m.Experimental {
-				badge(c, "实验", p.Warn)
-			}
-			a.footer(c, p, in, snap)
-		})
+	ui.Scroll(c).Fill().Padding(16, 6, 16, 14).Gap(12).Children(func() {
+		a.hero(c, p, in, snap)
+		a.readings(c, p, in, snap)
+		if m.Experimental {
+			ui.Row(c).Gap(8).Children(func() { badge(c, "实验", p.Warn) })
+		}
 	})
 }
 
-// hero is the big card: the ring for a percentage, the number for anything
-// else, with its trend beside it.
-//
-// It keeps its natural height. A card that grew its box while its ring kept
-// its size would be a border with a ring spilling out of it.
+// hero is the card the page leads with: the ring for a percentage, the value
+// for anything else, and its trend beside it.
 func (a *App) hero(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
 	primary, ok := pickPrimary(snap)
 	if !ok {
@@ -51,7 +39,7 @@ func (a *App) hero(c *ui.Context, p palette, in *app.Instance, snap core.Snapsho
 		return
 	}
 
-	card(c, p).Shrink(0).Children(func() {
+	card(c, p).Shrink(0).Padding(18, 16).Children(func() {
 		ui.Row(c).Gap(4).AlignItems(ui.Baseline).Children(func() {
 			label(c, p, primary.Label)
 			ui.Spacer(c)
@@ -59,32 +47,32 @@ func (a *App) hero(c *ui.Context, p palette, in *app.Instance, snap core.Snapsho
 				ui.Text(c, primary.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap()
 			}
 		})
-		ui.Row(c).AlignItems(ui.Center).Gap(18).Children(func() {
+		ui.Row(c).AlignItems(ui.Center).Gap(20).Children(func() {
 			if primary.Unit == core.UnitPercent {
-				ui.Box(c).Size(120, 120).
+				ui.Box(c).Size(172, 172).
 					Draw(func(pt *ui.Painter, r ui.Rect) {
 						drawRing(pt, r, p.Track, clamp01(primary.Value/100),
-							p.severityColor(primary.Severity), 11)
+							p.severityColor(primary.Severity), 15)
 					}).Children(func() {
 					ui.Column(c).Fill().Center().Children(func() {
 						ui.Row(c).AlignItems(ui.Baseline).Gap(1).Children(func() {
-							bigValue(c, core.FormatNumber(primary.Value), 36,
+							bigValue(c, core.FormatNumber(primary.Value), 50,
 								p.severityColor(primary.Severity))
-							ui.Text(c, "%").FontSize(15).TextColor(p.TextMuted)
+							ui.Text(c, "%").FontSize(19).TextColor(p.TextMuted)
 						})
 					})
 				})
 			} else {
-				bigValue(c, primary.Format(), 44, p.severityColor(primary.Severity))
+				bigValue(c, primary.Format(), 52, p.severityColor(primary.Severity))
 			}
 
-			ui.Column(c).Grow(1).Basis(0).Gap(6).Children(func() {
+			ui.Column(c).Grow(1).Basis(0).Gap(8).Children(func() {
 				if caption := heroCaption(primary); caption != "" {
-					ui.Text(c, caption).FontSize(13).Wrap().
+					ui.Text(c, caption).FontSize(14).Wrap().
 						TextColor(p.severityColor(primary.Severity))
 				}
 				if history := in.History(primary.ID); varies(history) {
-					sparkline(c, p, history, quietColor(p, primary.Severity), 48)
+					sparkline(c, p, history, quietColor(p, primary.Severity), 56)
 					label(c, p, "最近 "+historyWindow(in, primary.ID))
 				}
 			})
@@ -116,8 +104,8 @@ func pickPrimary(snap core.Snapshot) (core.Reading, bool) {
 	return snap.Lead()
 }
 
-// readings shows every reading but the primary one as a tile, two to a row:
-// a dashboard rather than a form.
+// readings lists every reading but the primary one, one row each, folding the
+// ones past the fourth behind an expander.
 func (a *App) readings(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
 	primary, _ := pickPrimary(snap)
 	var rest []core.Reading
@@ -126,76 +114,79 @@ func (a *App) readings(c *ui.Context, p palette, in *app.Instance, snap core.Sna
 			rest = append(rest, r)
 		}
 	}
-	if len(rest) > maxTiles {
-		rest = rest[:maxTiles]
-	}
 	if len(rest) == 0 {
 		return
 	}
-	ui.Grid(c).Columns(2).Gap(10).Children(func() {
-		for _, r := range rest {
-			a.readingTile(c, p, in, r)
+
+	shown := rest
+	folded := 0
+	if !a.expanded[in.ID] && len(rest) > maxRows {
+		shown = rest[:maxRows]
+		folded = len(rest) - maxRows
+	}
+
+	card(c, p).Padding(0, 8).Gap(0).Children(func() {
+		for i, r := range shown {
+			if i > 0 {
+				hline(c, p)
+			}
+			a.readingRow(c, p, in, r)
+		}
+		switch {
+		case folded > 0:
+			hline(c, p)
+			label := fmt.Sprintf("显示其余 %d 个", folded)
+			if a.disclosure(c, p, label).Clicked() {
+				a.expanded[in.ID] = true
+			}
+		case a.expanded[in.ID] && len(rest) > maxRows:
+			hline(c, p)
+			if a.disclosure(c, p, "收起").Clicked() {
+				a.expanded[in.ID] = false
+			}
 		}
 	})
 }
 
-// readingTile is one reading as a small card: its label, its value, and
-// whatever else says the most about it.
-func (a *App) readingTile(c *ui.Context, p palette, in *app.Instance, r core.Reading) {
+// readingRow is one reading: its label on the left, its value on the right,
+// and the trend between them.
+func (a *App) readingRow(c *ui.Context, p palette, in *app.Instance, r core.Reading) {
 	valueColor := p.Text
 	if r.Severity != core.SeverityNone {
 		valueColor = p.severityColor(r.Severity)
 	}
-	card(c, p).Padding(10, 8).Gap(3).MinHeight(76).Children(func() {
-		ui.Text(c, r.Label).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
+	ui.Row(c).Padding(12, 14).Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, r.Label).FontSize(12).NoWrap().MaxLines(1)
+		ui.Spacer(c)
+		if history := in.History(r.ID); varies(history) {
+			ui.Box(c).Width(96).Children(func() {
+				sparkline(c, p, history, quietColor(p, r.Severity), 22)
+			})
+		}
+		if r.Detail != "" {
+			ui.Text(c, r.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
+		}
 		if r.Text != "" {
-			// A reading whose value is words: the words are the value, with
-			// the detail under them.
-			ui.Text(c, r.Text).FontSize(13).Bold().Wrap().TextColor(valueColor)
-			if r.Detail != "" {
-				ui.Text(c, r.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
-			}
+			ui.Text(c, r.Text).FontSize(13).Bold().TextColor(valueColor).NoWrap().MaxLines(1)
 			return
 		}
-		ui.Row(c).AlignItems(ui.Baseline).Gap(6).Children(func() {
-			ui.Text(c, r.Format()).FontSize(19).Bold().NoWrap().TextColor(valueColor)
-			if r.Detail != "" {
-				ui.Text(c, r.Detail).FontSize(11).TextColor(p.TextMuted).
-					Grow(1).NoWrap().MaxLines(1)
-			}
-		})
-		if history := in.History(r.ID); varies(history) {
-			sparkline(c, p, history, quietColor(p, r.Severity), 22)
-		}
+		ui.Text(c, r.Format()).FontSize(14).Bold().TextColor(valueColor).NoWrap()
 	})
 }
 
-// varies reports whether a history is worth a sparkline: enough points, and
-// something other than a flat line.
-func varies(values []float64) bool {
-	if len(values) < 4 {
-		return false
+// disclosure is the row that folds or unfolds the readings below the fourth:
+// the whole row is the button, with the panel's muted ink.
+func (a *App) disclosure(c *ui.Context, p palette, label string) ui.Element {
+	row := ui.Row(c).Padding(10, 11).Gap(6).AlignItems(ui.Center).
+		Cursor(ui.CursorPointer).Key("disclosure")
+	if row.Hovered() {
+		row.Background(p.SurfaceHover)
 	}
-	lo, hi := values[0], values[0]
-	for _, v := range values {
-		if v < lo {
-			lo = v
-		}
-		if v > hi {
-			hi = v
-		}
-	}
-	return hi-lo > 1e-9
-}
-
-// footer says when the source last reported, and offers a refresh.
-func (a *App) footer(c *ui.Context, p palette, in *app.Instance, snap core.Snapshot) {
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, updatedText(snap)).FontSize(11).TextColor(p.TextMuted).Grow(1).NoWrap()
-		if ui.Button(c, "刷新").Label("刷新").Clicked() {
-			a.Host.RefreshOne(in.ID)
-		}
+	row.Children(func() {
+		ui.Text(c, label).FontSize(12).TextColor(p.TextMuted).Grow(1)
+		ui.Icon(c, iconChevron).FontSize(12).TextColor(p.TextMuted)
 	})
+	return row
 }
 
 func updatedText(snap core.Snapshot) string {

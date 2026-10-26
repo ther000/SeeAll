@@ -10,40 +10,61 @@ func rect(x, y, w, h int) mygo.Rectangle {
 	return mygo.Rectangle{X: x, Y: y, Width: w, Height: h}
 }
 
-// TestDockPutsThePanelInTheCorner checks the panel ends up against the right
-// edge of the screen and on top of the taskbar, which the work area already
-// leaves out.
-func TestDockPutsThePanelInTheCorner(t *testing.T) {
-	// A 2560×1440 display with a 72-pixel taskbar at 96 DPI.
+// TestInsetKeepsThePanelOffTheEdges checks the room the panel may fill is the
+// work area less the margin: the panel floats above the taskbar and off the
+// right edge instead of fusing with them.
+func TestInsetKeepsThePanelOffTheEdges(t *testing.T) {
 	work := rect(0, 0, 2560, 1368)
-	x, y := Dock(work, 600, 800)
-	if x != 2560-600 || y != 1368-800 {
-		t.Errorf("Dock = (%d, %d), want (%d, %d)", x, y, 2560-600, 1368-800)
+	area := Inset(work, 8)
+	if area.Width != 2552 || area.Height != 1360 || area.X != 0 || area.Y != 0 {
+		t.Errorf("Inset = %+v, want 2552×1360 at (0, 0)", area)
+	}
+}
+
+// TestInsetWithoutWorkArea leaves an unknown display alone, rather than making
+// a negative area out of it.
+func TestInsetWithoutWorkArea(t *testing.T) {
+	if got := Inset(rect(0, 0, 0, 0), 8); got.Width != 0 || got.Height != 0 {
+		t.Errorf("Inset of an unknown work area = %+v, want it unchanged", got)
+	}
+	if got := Inset(rect(0, 0, 4, 4), 8); got.Width < 1 || got.Height < 1 {
+		t.Errorf("Inset smaller than the margin = %+v, want at least one pixel", got)
+	}
+}
+
+// TestDockPutsThePanelInTheCorner checks the panel ends up against the right
+// edge of the area it may fill and at its bottom.
+func TestDockPutsThePanelInTheCorner(t *testing.T) {
+	// A 2560×1440 display with a 72-pixel taskbar at 96 DPI, less the margin.
+	area := rect(0, 0, 2552, 1360)
+	x, y := Dock(area, 660, 840)
+	if x != 2552-660 || y != 1360-840 {
+		t.Errorf("Dock = (%d, %d), want (%d, %d)", x, y, 2552-660, 1360-840)
 	}
 
 	// A second display to the right docks against its own right edge.
-	second := rect(2560, 0, 1920, 1040)
-	x, y = Dock(second, 600, 800)
-	if x != 2560+1920-600 || y != 1040-800 {
+	second := rect(2560, 0, 1912, 1032)
+	x, y = Dock(second, 660, 840)
+	if x != 2560+1912-660 || y != 1032-840 {
 		t.Errorf("Dock on the second display = (%d, %d)", x, y)
 	}
 }
 
-// TestDockNeverLeavesTheWorkArea keeps a panel too big for its display inside
-// it, at the top-left corner rather than off screen.
-func TestDockNeverLeavesTheWorkArea(t *testing.T) {
-	work := rect(0, 0, 400, 300)
-	x, y := Dock(work, 600, 800)
+// TestDockNeverLeavesTheArea keeps a panel too big for its display inside it,
+// at the top-left corner rather than off screen.
+func TestDockNeverLeavesTheArea(t *testing.T) {
+	area := rect(0, 0, 400, 300)
+	x, y := Dock(area, 660, 840)
 	if x != 0 || y != 0 {
 		t.Errorf("Dock of an oversized panel = (%d, %d), want (0, 0)", x, y)
 	}
 }
 
-// TestDockWithoutWorkArea leaves the panel where it is when the display is
+// TestDockWithoutArea leaves the panel where it is when the display is
 // unknown.
-func TestDockWithoutWorkArea(t *testing.T) {
-	if x, y := Dock(rect(0, 0, 0, 0), 600, 800); x != 0 || y != 0 {
-		t.Errorf("Dock without a work area = (%d, %d), want (0, 0)", x, y)
+func TestDockWithoutArea(t *testing.T) {
+	if x, y := Dock(rect(0, 0, 0, 0), 660, 840); x != 0 || y != 0 {
+		t.Errorf("Dock without an area = (%d, %d), want (0, 0)", x, y)
 	}
 }
 

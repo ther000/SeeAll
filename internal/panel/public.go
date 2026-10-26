@@ -1,5 +1,5 @@
-// Package panel draws the SeeAll window: the list of monitors on the left,
-// the chosen monitor or the settings on the right.
+// Package panel draws the SeeAll window: a title bar, the tabs that choose a
+// monitor, its page, and a status bar.
 package panel
 
 import (
@@ -8,9 +8,15 @@ import (
 	"seeall/internal/core"
 )
 
-// SettingsPage is the sidebar row that shows the settings instead of a
-// monitor. The tray menu uses it to open them.
+// SettingsPage is the row that shows the settings instead of a monitor. The
+// tray menu uses it to open them.
 const SettingsPage = "@settings"
+
+// OpenLog opens the log file, as the status bar's button does. The app sets
+// it once it knows where the file is.
+var OpenLog = func() {}
+
+func openLog() { OpenLog() }
 
 // Content returns the window's content for a panel: the view MyGo calls to
 // build each frame.
@@ -19,7 +25,7 @@ func Content(a *App) *ui.Content {
 }
 
 // Headline picks the one reading that says the most about a monitor: the
-// summary the tray menu, the sidebar and the overview show.
+// summary the tray menu and the tabs show.
 func Headline(snap core.Snapshot) string {
 	best, ok := snap.Lead()
 	if !ok {

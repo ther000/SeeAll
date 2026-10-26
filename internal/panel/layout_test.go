@@ -28,25 +28,30 @@ func fixture(t *testing.T) (*app.Host, *App) {
 }
 
 // TestSettingsStartsAtTheTop guards the bug the fixed-size panel had in the
-// old app: a page longer than the window must scroll, not push its own title
-// out of view.
+// old app: a page longer than the window must scroll, not push its own
+// content out of view. The tab row stays where it is above it.
 func TestSettingsStartsAtTheTop(t *testing.T) {
 	_, p := fixture(t)
 	p.SetSelected(SettingsPage)
-	tt := ui.NewTester(p.View, 380, 470)
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
 
-	// The header's subtitle is unique to the page, unlike "设置", which the
-	// sidebar also has at its foot.
-	r, ok := tt.Find("2 个监控项 · 2 个插件")
+	tab, ok := tt.Find("鼠标")
 	if !ok {
-		t.Fatalf("the settings header is missing: %v", tt.Texts())
+		t.Fatalf("the tab row is missing: %v", tt.Texts())
 	}
-	if r.Y > 60 {
-		// Everything the page holds, with where it sits, for the failure.
-		t.Fatalf("the settings header sits at y=%v, not at the top (found %+v)", r.Y, r)
+	first, ok := tt.Find("应用")
+	if !ok {
+		t.Fatalf("the settings page is empty: %v", tt.Texts())
+	}
+	if first.Y <= tab.Y {
+		t.Fatalf("the settings content sits at y=%v, above the tabs at y=%v", first.Y, tab.Y)
+	}
+	// Directly under the tabs, not pushed to the middle or the foot by a
+	// page that is longer than the window.
+	if first.Y > float32(DesignHeight)/4 {
+		t.Fatalf("the settings content starts at y=%v, not under the tabs at y=%v", first.Y, tab.Y)
 	}
 
-	// And the monitor list is reachable by scrolling.
 	texts := strings.Join(tt.Texts(), " ")
 	if !strings.Contains(texts, "鼠标") {
 		t.Fatalf("the settings page lists no monitor: %s", texts)
@@ -58,7 +63,7 @@ func TestSettingsStartsAtTheTop(t *testing.T) {
 func TestMonitorPageLeadsWithItsReading(t *testing.T) {
 	_, p := fixture(t)
 	p.SetSelected("mouse")
-	tt := ui.NewTester(p.View, 380, 470)
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
 
 	if !tt.HasText("72") {
 		t.Fatalf("the mouse page shows no level: %v", tt.Texts())
@@ -68,29 +73,44 @@ func TestMonitorPageLeadsWithItsReading(t *testing.T) {
 	}
 }
 
-// TestSidebarSelectionSwitchesPage checks a click on a sidebar row changes
-// what the right side shows.
-func TestSidebarSelectionSwitchesPage(t *testing.T) {
+// TestTabsChooseThePage checks a click on a tab shows that monitor, and that
+// the tab row follows a page chosen from elsewhere, as the tray menu does.
+func TestTabsChooseThePage(t *testing.T) {
 	h, p := fixture(t)
 	if len(h.Instances()) < 2 {
 		t.Skip("needs at least two built-in monitors")
 	}
-	// The row to click shows "鼠标", which the other page does not show, so
-	// the click cannot land on a section title with that name.
 	p.SetSelected("system")
-	tt := ui.NewTester(p.View, 380, 470)
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+
+	// "鼠标" is the tab of the other monitor and the title of its page, so
+	// the click has one row to land on here: the page shows the system.
 	if err := tt.Click("鼠标"); err != nil {
 		t.Fatal(err)
 	}
 	if p.Selected() != "mouse" {
 		t.Fatalf("selected %q, want mouse", p.Selected())
 	}
-}
 
-// findIn finds the element with text whose box starts right of x.
-func findIn(tt *ui.Tester, text string, x float32) (ui.Rect, bool) {
-	if r, ok := tt.Find(text); ok && r.X >= x {
-		return r, true
+	if err := tt.Click("打开设置"); err != nil {
+		t.Fatal(err)
 	}
-	return ui.Rect{}, false
+	if p.Selected() != SettingsPage {
+		t.Fatalf("selected %q, want the settings", p.Selected())
+	}
+
+	// Chosen from the tray menu, the tabs must point at the page shown.
+	p.SetSelected("system")
+	tt2 := ui.NewTester(p.View, DesignWidth, DesignHeight)
+	tab, ok := tt2.Find("本机")
+	if !ok {
+		t.Fatalf("the system tab is missing: %v", tt2.Texts())
+	}
+	body, ok := tt2.Find("CPU")
+	if !ok {
+		t.Fatalf("the system page is missing: %v", tt2.Texts())
+	}
+	if body.Y <= tab.Y {
+		t.Fatalf("the system page sits above the tabs: y=%v, tabs at %v", body.Y, tab.Y)
+	}
 }

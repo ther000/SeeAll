@@ -1,15 +1,14 @@
 package panel
 
 import (
-	"fmt"
 	"sort"
+	"strconv"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"seeall/internal/app"
 	"seeall/internal/core"
-	"seeall/internal/plugin"
 )
 
 // App is the panel's state. The view is a function of it, and it changes
@@ -17,19 +16,23 @@ import (
 type App struct {
 	// Host runs the plugins.
 	Host *app.Host
-	// Select is called when the user picks another row: the app remembers
+	// Select is called when the user picks another tab: the app remembers
 	// the choice.
 	Select func(id string)
-	// Size is the window's size, and the sidebar's width in it, as the app
-	// worked them out for its display.
+	// Size is the window's size, as the app worked it out for its display.
 	Size Metrics
 
+	// selected is the monitor the panel shows, or SettingsPage.
 	selected string
-	drafts   map[string]string
+	// tab is the index of the chosen tab: one per monitor in tab order, then
+	// the settings. The tab list owns it between frames.
+	tab int
+
+	drafts map[string]string
 	// confirmRemove is the instance whose remove button was pressed once.
 	confirmRemove string
-	// showAll lists every monitor on the overview page.
-	showAll bool
+	// expanded lists the monitors whose remaining readings are shown.
+	expanded map[string]bool
 }
 
 // New makes the panel's state.
@@ -38,6 +41,7 @@ func New(host *app.Host) *App {
 		Host:     host,
 		selected: host.LastInstance(),
 		drafts:   map[string]string{},
+		expanded: map[string]bool{},
 		Size:     Fit(1920, 1040),
 	}
 }
@@ -45,7 +49,7 @@ func New(host *app.Host) *App {
 // SetSize changes the panel's size, as another display asks for.
 func (a *App) SetSize(m Metrics) { a.Size = m }
 
-// Selected returns the row the panel shows.
+// Selected returns the monitor the panel shows.
 func (a *App) Selected() string {
 	if a.selected == "" {
 		if instances := a.Host.Instances(); len(instances) > 0 {
@@ -56,7 +60,7 @@ func (a *App) Selected() string {
 	return a.selected
 }
 
-// SetSelected shows another row.
+// SetSelected shows another monitor.
 func (a *App) SetSelected(id string) {
 	a.selected = id
 	a.confirmRemove = ""
@@ -68,7 +72,8 @@ func (a *App) SetSelected(id string) {
 	}
 }
 
-// View builds the panel. It is the window's content.
+// View builds the panel: a title bar, the tabs that choose what it shows, the
+// page, and a status bar at its foot.
 func (a *App) View(c *ui.Context) {
 	p := paletteFor(c)
 	a.handleKeys(c)
@@ -76,10 +81,10 @@ func (a *App) View(c *ui.Context) {
 	instances := a.Host.Instances()
 	a.ensureSelection(instances)
 
-	ui.Row(c).Fill().Background(p.Background).Children(func() {
-		a.sidebar(c, p, instances)
-		ui.Box(c).Width(1).FillHeight().Background(p.CardBorder)
-		ui.Column(c).Grow(1).FillHeight().Justify(ui.Start).Clip().Children(func() {
+	ui.Column(c).Fill().Background(p.Background).Children(func() {
+		a.header(c, p)
+		a.tabs(c, p, instances)
+		ui.Column(c).Grow(1).Shrink(1).Basis(0).Justify(ui.Start).Clip().Children(func() {
 			switch a.Selected() {
 			case SettingsPage:
 				a.settings(c, p, instances)
@@ -91,7 +96,107 @@ func (a *App) View(c *ui.Context) {
 				}
 			}
 		})
+		a.footer(c, p, instances)
 	})
+}
+
+// header is the title bar: what the panel is, and the refresh it offers from
+// any page.
+func (a *App) header(c *ui.Context, p palette) {
+	ui.Row(c).Shrink(0).Padding(16, 12).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, iconLogo).FontSize(20).TextColor(p.Accent)
+		ui.Text(c, "SeeAll").FontSize(15).Bold().Grow(1)
+		if ui.Button(c, "").Label("刷新").Description("刷新全部").Tooltip("刷新全部（Ctrl+R）").Children(func() {
+			ui.Icon(c, iconRefresh).FontSize(15)
+		}).Clicked() {
+			a.Host.Refresh()
+		}
+		on := a.Selected() == SettingsPage
+		if ui.Button(c, "").Label("打开设置").Description("打开设置").Tooltip("设置").
+			Children(func() {
+				ui.Icon(c, iconGear).FontSize(15).TextColor(colorIf(on, p.Accent, p.TextMuted))
+			}).Clicked() {
+			a.SetSelected(SettingsPage)
+		}
+	})
+}
+
+// tabs chooses what the page shows: one tab per monitor, then the settings.
+func (a *App) tabs(c *ui.Context, p palette, instances []*app.Instance) {
+	items := a.sorted(instances)
+	a.syncTab(items)
+
+	if len(items) == 0 {
+		return
+	}
+	ui.Row(c).Shrink(0).Padding(12, 6).Children(func() {
+		tabs := ui.TabsBase(c, &a.tab, len(items))
+		// The settings are not a tab, so none of them is lit while they
+		// show: a lit tab would claim a page that is not on screen.
+		lit := a.Selected() != SettingsPage
+		tabs.List.FillWidth().Gap(4).Children(func() {
+			for i, in := range items {
+				a.tabButton(c, p, tabs.Tab(i), lit && i == a.tab,
+					iconFor(in.Manifest().Icon), in.Name, in.Snapshot().Status)
+			}
+		})
+		if tabs.List.Changed() && a.tab < len(items) {
+			a.SetSelected(items[a.tab].ID)
+		}
+	})
+}
+
+// tabButton draws one tab: its icon, its name, and the dot that says whether
+// the monitor behind it is fine, which the page cannot show for the tabs it is
+// not on.
+func (a *App) tabButton(c *ui.Context, p palette, tab ui.Element, on bool, icon *ui.SVG, name string, status core.Status) {
+	tab.Grow(1).Basis(0).Justify(ui.Center).Padding(8, 10).Radius(9).
+		Gap(6).AlignItems(ui.Center).FocusRing(false)
+	if on {
+		tab.Background(p.Card).Border(1, p.CardBorder)
+	} else if tab.Hovered() {
+		tab.Background(p.SurfaceHover)
+	}
+	tab.Children(func() {
+		ui.Icon(c, icon).FontSize(13).TextColor(colorIf(on, p.Accent, p.TextMuted))
+		ui.Text(c, name).FontSize(12).NoWrap().MaxLines(1).Bold()
+		if status != core.StatusOK {
+			dot(c, p.statusColor(status), 6)
+		}
+	})
+}
+
+// footer is the status bar: what the page above it last did, on the left, and
+// the two things that leave the panel on the right.
+func (a *App) footer(c *ui.Context, p palette, instances []*app.Instance) {
+	ui.Box(c).Shrink(0).Height(1).Background(p.CardBorder)
+	ui.Row(c).Shrink(0).Padding(16, 9).Gap(2).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, a.statusLine(instances)).FontSize(11).TextColor(p.TextMuted).
+			Grow(1).NoWrap().MaxLines(1)
+		if ui.Button(c, "").Label("日志").Description("打开日志").Tooltip("打开日志").Children(func() {
+			ui.Text(c, "日志").FontSize(11).SingleLine()
+		}).Clicked() {
+			openLog()
+		}
+		if ui.Button(c, "").Label("退出").Description("退出 SeeAll").Tooltip("退出").Children(func() {
+			ui.Text(c, "退出").FontSize(11).SingleLine()
+		}).Clicked() {
+			mygo.App.Quit()
+		}
+	})
+}
+
+// statusLine says what the footer says about the page above it.
+func (a *App) statusLine(instances []*app.Instance) string {
+	if a.Selected() == SettingsPage {
+		return strconv.Itoa(len(instances)) + " 个监控项 · " +
+			strconv.Itoa(len(a.Host.Plugins())) + " 个插件"
+	}
+	in := a.Host.Instance(a.Selected())
+	if in == nil {
+		return "没有监控项"
+	}
+	return updatedText(in.Snapshot())
 }
 
 // ensureSelection keeps the panel on a row that exists: a monitor the user
@@ -110,6 +215,21 @@ func (a *App) ensureSelection(instances []*app.Instance) {
 	a.selected = SettingsPage
 }
 
+// syncTab points the tab list at what the panel shows. The settings are not a
+// tab, so they keep the tabs on the monitor shown last.
+func (a *App) syncTab(items []*app.Instance) {
+	if a.Selected() == SettingsPage {
+		return
+	}
+	for i, in := range items {
+		if in.ID == a.Selected() {
+			a.tab = i
+			return
+		}
+	}
+	a.tab = 0
+}
+
 func (a *App) handleKeys(c *ui.Context) {
 	if c.Shortcut(ui.Cmd, ui.KeyR) || c.Shortcut(0, ui.KeyF5) {
 		a.Host.Refresh()
@@ -121,40 +241,8 @@ func (a *App) handleKeys(c *ui.Context) {
 	}
 }
 
-// sidebar lists the monitors by kind, with settings at its foot.
-func (a *App) sidebar(c *ui.Context, p palette, instances []*app.Instance) {
-	ui.Column(c).Width(float32(a.Size.Sidebar)).FillHeight().Background(p.Card).
-		BorderWidth(0, 0, 0, 1).BorderColor(p.CardBorder).Children(func() {
-		ui.Row(c).Padding(14, 14, 12, 12).Gap(6).Children(func() {
-			ui.Text(c, "SeeAll").FontSize(14).Bold().Grow(1)
-			if ui.Button(c, "").Label("刷新").Tooltip("刷新全部（Ctrl+R）").Children(func() {
-				ui.Icon(c, iconRefresh).FontSize(14)
-			}).Clicked() {
-				a.Host.Refresh()
-			}
-		})
-		ui.Scroll(c).Grow(1).Padding(8, 0, 8, 0).Gap(1).Children(func() {
-			var kind plugin.Kind
-			for _, in := range a.sorted(instances) {
-				m := in.Manifest()
-				if m.Kind != kind {
-					kind = m.Kind
-					ui.Text(c, kind.String()).FontSize(10).TextColor(p.TextMuted).
-						Padding(8, 8, 6, 6)
-				}
-				a.sidebarRow(c, p, in)
-			}
-			if len(instances) == 0 {
-				ui.Text(c, "还没有监控项").FontSize(11).TextColor(p.TextMuted).Padding(8)
-			}
-		})
-		ui.Box(c).Height(1).Background(p.CardBorder)
-		a.settingsRow(c, p)
-	})
-}
-
 // sorted puts the monitors in a stable order: by kind, then by name, so the
-// sidebar does not jump as snapshots arrive.
+// tabs do not jump as snapshots arrive.
 func (a *App) sorted(instances []*app.Instance) []*app.Instance {
 	out := append([]*app.Instance(nil), instances...)
 	sort.SliceStable(out, func(i, j int) bool {
@@ -165,76 +253,6 @@ func (a *App) sorted(instances []*app.Instance) []*app.Instance {
 		return out[i].Name < out[j].Name
 	})
 	return out
-}
-
-func (a *App) sidebarRow(c *ui.Context, p palette, in *app.Instance) {
-	selected := a.Selected() == in.ID
-	snap := in.Snapshot()
-	row := ui.Row(c).Key(in.ID).Padding(6, 8).Radius(7).Gap(7).Cursor(ui.CursorPointer)
-	if selected {
-		row.Background(p.Surface)
-	} else if row.Hovered() {
-		row.Background(p.SurfaceHover)
-	}
-	row.Children(func() {
-		ui.Icon(c, iconFor(in.Manifest().Icon)).FontSize(13).TextColor(colorIf(selected, p.Text, p.TextMuted))
-		ui.Column(c).Grow(1).Gap(0).Children(func() {
-			ui.Text(c, in.Name).FontSize(12).NoWrap().MaxLines(1).
-				TextColor(colorIf(selected, p.Text, p.Text))
-			ui.Text(c, sidebarHint(snap)).FontSize(10).NoWrap().MaxLines(1).TextColor(p.TextMuted)
-		})
-		dot(c, p.statusColor(snap.Status), 6)
-	})
-	if row.Clicked() {
-		a.SetSelected(in.ID)
-	}
-}
-
-// sidebarHint is the second line of a sidebar row: the value that matters
-// most, or what the source is waiting for.
-func sidebarHint(snap core.Snapshot) string {
-	if len(snap.Readings) == 0 {
-		if snap.Subtitle != "" {
-			return snap.Subtitle
-		}
-		return snap.Status.String()
-	}
-	best, ok := snap.Lead()
-	if !ok {
-		return snap.Status.String()
-	}
-	return best.Format()
-}
-
-func severityRank(s core.Severity) int {
-	switch s {
-	case core.SeverityCritical:
-		return 0
-	case core.SeverityWarn:
-		return 1
-	case core.SeverityOffline:
-		return 2
-	case core.SeverityOK:
-		return 3
-	}
-	return 4
-}
-
-func (a *App) settingsRow(c *ui.Context, p palette) {
-	selected := a.Selected() == SettingsPage
-	row := ui.Row(c).Key(SettingsPage).Padding(10, 8).Gap(7).Cursor(ui.CursorPointer)
-	if selected {
-		row.Background(p.Surface)
-	} else if row.Hovered() {
-		row.Background(p.SurfaceHover)
-	}
-	row.Children(func() {
-		ui.Icon(c, iconGear).FontSize(13).TextColor(colorIf(selected, p.Text, p.TextMuted))
-		ui.Text(c, "设置").FontSize(12)
-	})
-	if row.Clicked() {
-		a.SetSelected(SettingsPage)
-	}
 }
 
 func colorIf(cond bool, yes, no ui.Color) ui.Color {
@@ -255,24 +273,3 @@ func (a *App) emptyDetail(c *ui.Context, p palette) {
 		}
 	})
 }
-
-// emptySnap is what a page that is not a monitor passes to header.
-func emptySnap() core.Snapshot { return core.Snapshot{} }
-
-// header is the title line every page shares.
-func (a *App) header(c *ui.Context, p palette, title, subtitle string, snap core.Snapshot, showStatus bool) {
-	ui.Row(c).Padding(16, 14, 12, 10).Gap(8).Children(func() {
-		ui.Column(c).Grow(1).Gap(1).Children(func() {
-			ui.Text(c, title).FontSize(13).Bold().NoWrap().MaxLines(1)
-			if subtitle != "" {
-				ui.Text(c, subtitle).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
-			}
-		})
-		if showStatus {
-			badge(c, snap.Status.String(), p.statusColor(snap.Status))
-		}
-	})
-}
-
-var _ = fmt.Sprintf
-var _ = mygo.App

@@ -15,11 +15,13 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"seeall/internal/app"
 	"seeall/internal/core"
 	"seeall/internal/panel"
+	"seeall/internal/tray"
 )
 
 func main() {
@@ -33,9 +35,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// The preview draws the panel this machine gets: a 2560×1440 display
-	// at 150% scaling, so the work area is 1706×912 DIPs.
-	fitted := panel.Fit(1706, 912)
+	// The preview draws the panel this machine gets: a 2560×1440 display at
+	// 150% scaling, so the work area is 1706×912 DIPs, less the margin that
+	// keeps the panel off the screen edge and above the taskbar.
+	area := tray.Inset(mygo.Rectangle{Width: 1706, Height: 912}, tray.Margin)
+	fitted := panel.Fit(area.Width, area.Height)
 	w, h := *width, *height
 	if w == 0 {
 		w = fitted.Width

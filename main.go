@@ -65,6 +65,11 @@ func main() {
 	s.host.Logf = func(format string, args ...any) { log.Printf(format, args...) }
 	s.panel = panel.New(s.host)
 	s.panel.Select = func(string) { s.refresh() }
+	panel.OpenLog = func() {
+		if dir, err := mygo.App.Path(mygo.PathLogs); err == nil {
+			mygo.Shell.ShowItemInFolder(filepath.Join(dir, "seeall.log"))
+		}
+	}
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		s.quitting = true
@@ -126,8 +131,14 @@ func (s *state) screenWorkArea() mygo.Rectangle {
 	return mygo.Screen.PrimaryDisplay().WorkArea
 }
 
+// dockArea is the room the panel may fill: the work area less the margin that
+// keeps it off the screen edge and above the taskbar.
+func (s *state) dockArea() mygo.Rectangle {
+	return tray.Inset(s.screenWorkArea(), tray.Margin)
+}
+
 func (s *state) createWindow() {
-	area := s.screenWorkArea()
+	area := s.dockArea()
 	s.metrics = panel.Fit(area.Width, area.Height)
 	s.panel.SetSize(s.metrics)
 	x, y := tray.Dock(area, s.metrics.Width, s.metrics.Height)
@@ -168,7 +179,7 @@ func (s *state) createWindow() {
 
 // refit re-measures the display and keeps the panel in its corner.
 func (s *state) refit() {
-	area := s.screenWorkArea()
+	area := s.dockArea()
 	if area.Width == 0 {
 		return
 	}
