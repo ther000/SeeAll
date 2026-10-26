@@ -14,6 +14,14 @@ import (
 // the panel at its narrowest, wide enough for a number and its unit.
 const cardsPerRow = 2
 
+// trendWidth and trendHeight size the trend in the top right of a card. The
+// room is kept whether a reading has a trend or not, so that cards in a row
+// keep the same height and the trends line up.
+const (
+	trendWidth  = 54
+	trendHeight = 18
+)
+
 // detail is a monitor's page: the reading that matters in the hero card at the
 // top, and every other reading as a card of its own under it.
 func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
@@ -132,18 +140,34 @@ func (a *App) readingCard(c *ui.Context, p palette, in *app.Instance, r core.Rea
 		valueColor = p.severityColor(r.Severity)
 	}
 	card(c, p).Padding(13, 11).Gap(2).MinHeight(96).Children(func() {
-		ui.Text(c, r.Label).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
+		// The label and the trend share the card's top row, the trend at its
+		// right, so the eye finds the shape of a value in the same place on
+		// every card.
+		ui.Row(c).Gap(8).AlignItems(ui.Start).MinHeight(trendHeight).Children(func() {
+			ui.Text(c, r.Label).FontSize(11).TextColor(p.TextMuted).
+				NoWrap().MaxLines(1).Grow(1)
+			a.trend(c, p, in, r, trendWidth)
+		})
 		// A value of words is set as the same size as a number: a card of
 		// "无线" beside a card of "1200" is one row of cards, not two.
 		ui.Text(c, r.Format()).FontSize(22).Bold().TextColor(valueColor).Wrap().MaxLines(2)
 		if r.Detail != "" {
 			ui.Text(c, r.Detail).FontSize(11).TextColor(p.TextMuted).NoWrap().MaxLines(1)
 		}
-		if history := in.History(r.ID); varies(history) {
-			ui.Spacer(c)
-			sparkline(c, p, history, quietColor(p, r.Severity), 20)
-		}
 	})
+}
+
+// trend draws the recent values of a reading as a sparkline in a box of the
+// size every card keeps for it. A reading without a history worth drawing
+// leaves the box empty, so that the room stays where the other cards have it.
+func (a *App) trend(c *ui.Context, p palette, in *app.Instance, r core.Reading, width float32) ui.Element {
+	box := ui.Box(c).Width(width).Height(trendHeight)
+	if history := in.History(r.ID); varies(history) {
+		box.Draw(func(pt *ui.Painter, rect ui.Rect) {
+			drawSparkline(pt, rect, history, quietColor(p, r.Severity))
+		})
+	}
+	return box
 }
 
 func historyWindow(in *app.Instance, readingID string) string {

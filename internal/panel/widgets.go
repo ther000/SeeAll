@@ -74,33 +74,39 @@ func card(c *ui.Context, p palette) ui.Element {
 // newest point marked.
 func sparkline(c *ui.Context, p palette, values []float64, color ui.Color, height float32) ui.Element {
 	return ui.Box(c).Height(height).Draw(func(pt *ui.Painter, r ui.Rect) {
-		if len(values) < 2 {
-			return
-		}
-		lo, hi := values[0], values[0]
-		for _, v := range values {
-			lo = math.Min(lo, v)
-			hi = math.Max(hi, v)
-		}
-		if hi-lo < 1e-9 {
-			hi = lo + 1
-		}
-		path := &ui.Path{}
-		for i, v := range values {
-			x := r.X + r.W*float32(i)/float32(len(values)-1)
-			y := r.Y + r.H - r.H*float32((v-lo)/(hi-lo))
-			if i == 0 {
-				path.MoveTo(x, y)
-			} else {
-				path.LineTo(x, y)
-			}
-		}
-		pt.StrokePath(path, 1.5, color)
-		last := values[len(values)-1]
-		x := r.X + r.W
-		y := r.Y + r.H - r.H*float32((last-lo)/(hi-lo))
-		pt.Fill(ui.Rect{X: x - 2, Y: y - 2, W: 4, H: 4}, color, 2)
+		drawSparkline(pt, r, values, color)
 	})
+}
+
+// drawSparkline paints values as a line filling r, with the newest point
+// marked, for the elements that draw a trend rather than hand it a box.
+func drawSparkline(pt *ui.Painter, r ui.Rect, values []float64, color ui.Color) {
+	if len(values) < 2 {
+		return
+	}
+	lo, hi := values[0], values[0]
+	for _, v := range values {
+		lo = math.Min(lo, v)
+		hi = math.Max(hi, v)
+	}
+	if hi-lo < 1e-9 {
+		hi = lo + 1
+	}
+	path := &ui.Path{}
+	for i, v := range values {
+		x := r.X + r.W*float32(i)/float32(len(values)-1)
+		y := r.Y + r.H - r.H*float32((v-lo)/(hi-lo))
+		if i == 0 {
+			path.MoveTo(x, y)
+		} else {
+			path.LineTo(x, y)
+		}
+	}
+	pt.StrokePath(path, 1.5, color)
+	last := values[len(values)-1]
+	x := r.X + r.W
+	y := r.Y + r.H - r.H*float32((last-lo)/(hi-lo))
+	pt.Fill(ui.Rect{X: x - 2, Y: y - 2, W: 4, H: 4}, color, 2)
 }
 
 // varies reports whether a history is worth a sparkline: enough points, and
