@@ -24,8 +24,6 @@ const (
 	KindSystem Kind = "system"
 	// KindNetwork watches machines and services elsewhere.
 	KindNetwork Kind = "network"
-	// KindAgent watches the AI agents running on this computer.
-	KindAgent Kind = "agent"
 )
 
 // Order sorts the kinds the way the sidebar does: the hardware first, then
@@ -49,8 +47,6 @@ func (k Kind) String() string {
 		return "本机"
 	case KindNetwork:
 		return "服务"
-	case KindAgent:
-		return "Agent"
 	}
 	return string(k)
 }
@@ -75,12 +71,6 @@ type Manifest struct {
 	// DefaultInstance is the name of the instance every install starts
 	// with: "鼠标", "本机".
 	DefaultInstance string
-	// Interval is how often the host polls the instance; zero means the
-	// plugin's own timer drives it.
-	Interval time.Duration
-	// Experimental marks a plugin whose protocol is not verified on real
-	// hardware; the UI says so instead of pretending.
-	Experimental bool
 	// Combined reads a plugin's page as one card: the readings of one device
 	// belong together, so they go in the hero card under the value rather
 	// than as cards of their own beside it.
@@ -113,17 +103,14 @@ type Instance interface {
 // Env is everything an instance gets from the app: its settings, the way
 // to publish snapshots and to reach the user.
 type Env struct {
-	// InstanceID is unique across the app: "mouse", "server:github".
+	// InstanceID is unique across the app.
 	InstanceID string
-	// Name is what the sidebar shows for the instance.
-	Name string
 
 	manifest Manifest
 	settings *Settings
 
 	mu     sync.RWMutex
 	snap   core.Snapshot
-	status string
 	logf   func(string, ...any)
 	notify func(title, body string)
 	onSnap func(instanceID string, snap core.Snapshot)
@@ -132,11 +119,10 @@ type Env struct {
 }
 
 // NewEnv makes an environment for one instance.
-func NewEnv(instanceID, name string, m Manifest, settings *Settings) *Env {
+func NewEnv(instanceID string, m Manifest, settings *Settings) *Env {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Env{
 		InstanceID: instanceID,
-		Name:       name,
 		manifest:   m,
 		settings:   settings,
 		ctx:        ctx,
@@ -178,26 +164,11 @@ func (e *Env) Publish(snap core.Snapshot) {
 	e.onSnap(e.InstanceID, snap)
 }
 
-// SetStatus records what the instance is doing, for the subtitle of its page
-// while it has no snapshot yet.
-func (e *Env) SetStatus(text string) {
-	e.mu.Lock()
-	e.status = text
-	e.mu.Unlock()
-}
-
 // Snapshot returns the last published snapshot.
 func (e *Env) Snapshot() core.Snapshot {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.snap
-}
-
-// Status returns the last SetStatus text.
-func (e *Env) Status() string {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	return e.status
 }
 
 // Stop cancels the instance's context.

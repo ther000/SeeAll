@@ -4,7 +4,6 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +29,6 @@ type Instance struct {
 	monitor plugin.Instance
 	snap    core.Snapshot
 	history map[string]*core.Ring
-	lastErr string
 }
 
 // Snapshot returns the instance's newest snapshot.
@@ -198,7 +196,7 @@ func (h *Host) Add(pluginID, name string, values map[string]string) *Instance {
 	if values != nil {
 		settings.Load(values)
 	}
-	env := plugin.NewEnv(id, name, m, settings)
+	env := plugin.NewEnv(id, m, settings)
 	in := &Instance{ID: id, PluginID: m.ID, Name: name, Env: env, history: map[string]*core.Ring{}}
 	env.SetLog(h.Logf)
 	env.SetNotify(h.notifyInstance)
@@ -297,7 +295,6 @@ func (h *Host) storeSnapshot(instanceID string, snap core.Snapshot) {
 	}
 	in.mu.Lock()
 	in.snap = snap
-	in.lastErr = snap.Err
 	if in.history == nil {
 		in.history = map[string]*core.Ring{}
 	}
@@ -323,77 +320,6 @@ func (h *Host) notifyInstance(title, body string) { h.Notify(title, body) }
 
 // now is time.Now, replaceable by tests.
 var now = time.Now
-
-// Summaries returns one line per instance, for the overview and the tray
-// menu.
-func (h *Host) Summaries() []Summary {
-	instances := h.Instances()
-	out := make([]Summary, 0, len(instances))
-	for _, in := range instances {
-		snap := in.Snapshot()
-		out = append(out, Summary{
-			ID:       in.ID,
-			Name:     in.Name,
-			Kind:     in.Manifest().Kind,
-			Status:   snap.Status,
-			Headline: headline(snap),
-		})
-	}
-	return out
-}
-
-// Summary is one instance as the overview lists it.
-type Summary struct {
-	ID       string
-	Name     string
-	Kind     plugin.Kind
-	Status   core.Status
-	Headline string
-}
-
-// headline picks the one reading that says the most about an instance.
-func headline(snap core.Snapshot) string {
-	if len(snap.Readings) == 0 {
-		if snap.Subtitle != "" {
-			return snap.Subtitle
-		}
-		return "还没有数据"
-	}
-	best := snap.Readings[0]
-	rank := readingRank(best)
-	for _, r := range snap.Readings[1:] {
-		if readingRank(r) < rank {
-			best = r
-			rank = readingRank(r)
-		}
-	}
-	if best.Format() == "" {
-		return snap.Subtitle
-	}
-	return best.Label + " " + best.Format()
-}
-
-// readingRank orders readings by how much they say: warnings first, then
-// values, then words.
-func readingRank(r core.Reading) int {
-	rank := 10
-	switch r.Severity {
-	case core.SeverityCritical:
-		rank = 0
-	case core.SeverityWarn:
-		rank = 1
-	case core.SeverityOffline:
-		rank = 2
-	case core.SeverityOK:
-		rank = 3
-	case core.SeverityInfo:
-		rank = 4
-	}
-	if r.Text != "" {
-		rank += 5
-	}
-	return rank
-}
 
 // ---- settings file ----
 
@@ -574,10 +500,4 @@ func (h *Host) SetLastInstance(id string) {
 	h.saved.UI.LastInstance = id
 	h.mu.Unlock()
 	h.save()
-}
-
-// String names a snapshot for the log.
-func (in *Instance) String() string {
-	snap := in.Snapshot()
-	return fmt.Sprintf("%s(%s): %s", in.Name, in.ID, snap.Status)
 }

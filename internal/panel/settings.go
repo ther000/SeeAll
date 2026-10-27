@@ -103,9 +103,6 @@ func (a *App) instanceCard(c *ui.Context, p palette, in *app.Instance) {
 				ui.Text(c, in.Name).FontSize(12).Bold().NoWrap()
 				ui.Text(c, m.Summary).FontSize(11).TextColor(p.TextMuted).Wrap()
 			})
-			if m.Experimental {
-				badge(c, "实验", p.Warn)
-			}
 			confirming := a.confirmRemove == in.ID
 			buttonLabel := "移除"
 			if confirming {
@@ -203,11 +200,8 @@ func (a *App) settingField(c *ui.Context, p palette, in *app.Instance, def plugi
 		ui.Column(c).Gap(4).Children(func() {
 			ui.Text(c, def.Label).FontSize(12)
 			value := drafts[def.Key]
-			field := ui.TextInput(c, &value).Placeholder(def.Placeholder).Label(def.Label)
-			if def.Secret {
-				field.Password()
-			}
-			field.FillWidth()
+			field := ui.TextInput(c, &value).Placeholder(def.Placeholder).Label(def.Label).
+				FillWidth()
 			if value != drafts[def.Key] {
 				a.drafts[in.ID+"/"+def.Key] = value
 				// Numbers are written as they parse; text is written

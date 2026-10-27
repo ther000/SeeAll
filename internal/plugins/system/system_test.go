@@ -12,7 +12,7 @@ import (
 func newTestInstance(t *testing.T) *instance {
 	t.Helper()
 	m := Manifest()
-	env := plugin.NewEnv("system", "本机", m, plugin.NewSettings(m.Settings))
+	env := plugin.NewEnv("system", m, plugin.NewSettings(m.Settings))
 	return &instance{env: env}
 }
 

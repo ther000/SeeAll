@@ -128,14 +128,6 @@ func varies(values []float64) bool {
 	return hi-lo > 1e-9
 }
 
-// badge is a small pill, used for a source's status word.
-func badge(c *ui.Context, text string, color ui.Color) ui.Element {
-	return ui.Box(c).Padding(2, 7).Radius(999).Background(color.Alpha(0.14)).
-		Children(func() {
-			ui.Text(c, text).FontSize(11).TextColor(color).NoWrap()
-		})
-}
-
 // hline is a hairline between two groups of content.
 func hline(c *ui.Context, p palette) ui.Element {
 	return ui.Box(c).Height(1).MarginY(2).Background(p.CardBorder)

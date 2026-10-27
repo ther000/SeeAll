@@ -41,9 +41,12 @@ type Instance interface {
 `Context()` 在 Stop 时被取消、`Notify()` 弹系统通知、`Logf()` 写日志。
 插件不碰 UI、不碰文件路径、不管生命周期。
 
-`Manifest` 声明：ID、显示名、一句话说明、分组（设备/本机）、图标、
-设置字段（`Setting{Key,Label,Type,Default,...}`）、能否多实例、默认实例名、是否实验状态，
+`Manifest` 声明：ID、显示名、一句话说明、分组（设备/本机/服务）、图标、
+设置字段（`Setting{Key,Label,Type,Default,...}`）、能否多实例、默认实例名，
 以及 `Combined`——这个插件的读数描述同一个东西，页面用一张卡装下（鼠标：电量/连接/DPI）。
+
+**Manifest 只放有人在读的字段。** 采样频率写在各插件的 `Start()` 里（宿主没有定时器），
+「未验证协议」的标记在它真的有一个未验证协议时才加回来。
 
 设置页完全由 `Manifest.Settings` 生成：加一个字段就多一个控件，UI 代码不用动。
 
@@ -54,7 +57,6 @@ host := app.NewHost(dataDir)   // 带内置插件
 host.Load()                    // 读 seeall.json；没有就按默认插件各建一个实例
 host.Instances() []*Instance   // 侧栏顺序
 host.Instance(id) *Instance
-host.Summaries() []Summary     // 托盘菜单用
 host.Refresh(); host.RefreshOne(id)
 host.Add(pluginID, name, values) *Instance
 host.Remove(id)
@@ -75,7 +77,7 @@ host.Inject(id, snap) bool; host.InjectHistory(id, reading, values)
 type Reading struct {
 	ID, Label string
 	Value     float64
-	Unit      Unit      // %, ms, bit/s, °C, 天……
+	Unit      Unit      // %、B、bit/s、ms、s，或任意 Unit("W")
 	Text      string    // 有它就显示文字，不显示数字
 	Severity  Severity  // none / ok / info / warn / critical / offline
 	Detail    string    // 副行：「2 秒前」「2.1 GB / 5.9 GB」

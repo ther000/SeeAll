@@ -50,7 +50,7 @@ Go + MyGo 原生 UI，**没有 webview、没有前端构建、没有 JS**。别�
 - 面板尺寸的设计单位是**物理像素**（660×840），窗口收 DIP，`Fit` 必须传 `ScaleFactor`。
 - `ui.Element` 只活一个 build pass，别存进结构体或跨 goroutine 传（`mygo vet` 会抓）。
 - 要量控件本身就得写 `.Label()`，否则 `Tester.Find` 量到的是内层文字盒。
-- `Manifest.Interval` 目前**没人读**，宿主没有定时器，采样频率在各插件的 `Start()` 里。
+- 宿主**没有定时器**：采样频率写在各插件自己的 `Start()` 里，别在 Manifest 上找。
 - 显卡计数器按 LUID 区分，直接 `sum()` 得到的是"所有卡加起来"。
 
 ## 不要做

@@ -44,35 +44,3 @@ func (r *Ring) Values() []float64 {
 	out = append(out, r.buf[:r.next]...)
 	return out
 }
-
-// Len returns how many values the ring holds.
-func (r *Ring) Len() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.full {
-		return len(r.buf)
-	}
-	return r.next
-}
-
-// Last returns the newest value, and whether there is one.
-func (r *Ring) Last() (float64, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.next == 0 && !r.full {
-		return 0, false
-	}
-	i := r.next - 1
-	if i < 0 {
-		i = len(r.buf) - 1
-	}
-	return r.buf[i], true
-}
-
-// Clear drops every value.
-func (r *Ring) Clear() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.next = 0
-	r.full = false
-}

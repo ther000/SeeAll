@@ -21,7 +21,6 @@ func Manifest() plugin.Manifest {
 		Kind:            plugin.KindDevice,
 		Icon:            "mouse",
 		DefaultInstance: "鼠标",
-		Interval:        5 * time.Second,
 		// Battery, link and DPI are one mouse's readings: its page shows them
 		// in one card.
 		Combined: true,

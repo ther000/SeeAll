@@ -39,8 +39,6 @@ type Setting struct {
 	// running machine knows: the graphics cards it has. It is asked on every
 	// frame the settings are built, so it must be cheap or cache its answer.
 	OptionsFor func() []Option
-	// Secret marks a value the settings page hides, such as a token.
-	Secret bool
 }
 
 // Settings is one instance's values: the defaults of its manifest's

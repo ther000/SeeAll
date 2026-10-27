@@ -21,7 +21,6 @@ func Manifest() plugin.Manifest {
 		Kind:            plugin.KindSystem,
 		Icon:            "cpu",
 		DefaultInstance: "本机",
-		Interval:        2 * time.Second,
 		Settings: []plugin.Setting{
 			// The list is filled in when the page is drawn: which cards a
 			// machine has is not known until it is running.

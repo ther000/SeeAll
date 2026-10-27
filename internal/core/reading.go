@@ -76,22 +76,19 @@ func (s Status) String() string {
 }
 
 // Unit is how a reading's number is written.
+//
+// Only units with a rule of their own are named below: a plain one is written
+// by the default branch as the number and the unit's text, so Unit("W") reads
+// "45 W" without a constant here.
 type Unit string
 
 const (
 	UnitNone    Unit = ""
 	UnitPercent Unit = "%"
-	UnitHz      Unit = "Hz"
-	UnitBitmap  Unit = "bit/s"
 	UnitBytes   Unit = "B"
+	UnitBitmap  Unit = "bit/s"
 	UnitMillis  Unit = "ms"
 	UnitSeconds Unit = "s"
-	UnitMinutes Unit = "min"
-	UnitCelsius Unit = "°C"
-	UnitWatt    Unit = "W"
-	UnitRPM     Unit = "rpm"
-	UnitDay     Unit = "天"
-	UnitVolt    Unit = "V"
 )
 
 // Reading is one value a source reports, such as a battery level or the
@@ -299,26 +296,4 @@ func (s Severity) rank() int {
 		return 4
 	}
 	return 5
-}
-
-// Worst returns the most severe status of the snapshot's readings.
-func (s Snapshot) Worst() Status {
-	worst := s.Status
-	for _, r := range s.Readings {
-		switch r.Severity {
-		case SeverityCritical:
-			if worst < StatusError {
-				worst = StatusError
-			}
-		case SeverityWarn:
-			if worst < StatusWarn {
-				worst = StatusWarn
-			}
-		case SeverityOffline:
-			if worst < StatusOffline {
-				worst = StatusOffline
-			}
-		}
-	}
-	return worst
 }

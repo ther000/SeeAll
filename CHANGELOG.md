@@ -14,6 +14,12 @@
 
 - 本机插件不再监控磁盘剩余空间：一个盘符的剩余空间在这块面板上不是会变的东西。
   设置里对应的「盘符」输入框一并去掉，配置文件里的旧值在下次保存时消失。
+- 插件契约里没人用的成员删掉了：`Manifest.Interval`（宿主没有定时器，采样频率本来
+  就写在各插件的 `Start()` 里）、`Manifest.Experimental`（面板上那个「实验」标签随之
+  去掉）、`KindAgent`、`Setting.Secret`、`Env.Name`、`Env.SetStatus`、`Env.Status`。
+  连同 `Host.Summaries`、`Snapshot.Worst`、`Ring.Len/Last/Clear` 这几具没人调用的尸体。
+- 读数单位只留下真有格式化规则的六个（%、B、bit/s、ms、s）：其余七个（Hz、°C、W、rpm、
+  天、V、min）没有任何插件报，默认分支本来就能把 `Unit("W")` 写成 "45 W"。
 
 ### 变更
 

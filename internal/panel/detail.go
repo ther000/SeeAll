@@ -1,9 +1,6 @@
 package panel
 
 import (
-	"fmt"
-	"time"
-
 	"github.com/egoist/mygo/ui"
 
 	"seeall/internal/app"
@@ -37,9 +34,6 @@ func (a *App) detail(c *ui.Context, p palette, in *app.Instance) {
 		if m.Combined {
 			ui.Scroll(c).Fill().Gap(CardGap).Padding(0, gridInset).Children(func() {
 				a.combined(c, p, in, snap)
-				if m.Experimental {
-					ui.Row(c).Gap(8).Children(func() { badge(c, "实验", p.Warn) })
-				}
 			})
 			return
 		}
@@ -276,34 +270,6 @@ func (a *App) trend(c *ui.Context, p palette, in *app.Instance, r core.Reading, 
 	return box
 }
 
-func historyWindow(in *app.Instance, readingID string) string {
-	n := len(in.History(readingID))
-	seconds := intervalSeconds(in)
-	if n <= 1 || seconds <= 0 {
-		return "一小会儿"
-	}
-	total := time.Duration(n*seconds) * time.Second
-	switch {
-	case total < time.Minute:
-		return fmt.Sprintf("%d 秒", int(total.Seconds()))
-	case total < time.Hour:
-		return fmt.Sprintf("%d 分钟", int(total.Minutes()))
-	default:
-		return fmt.Sprintf("%d 小时", int(total.Hours()))
-	}
-}
-
-// intervalSeconds is how often an instance polls, for the history label.
-func intervalSeconds(in *app.Instance) int {
-	switch in.Manifest().ID {
-	case "mouse":
-		return 3
-	case "system":
-		return 2
-	}
-	return 5
-}
-
 // quietColor is a reading's color for drawing: readings without a severity
 // of their own, as a trend rather than a level, are drawn faintly.
 func quietColor(p palette, s core.Severity) ui.Color {
@@ -311,11 +277,4 @@ func quietColor(p palette, s core.Severity) ui.Color {
 		return p.TextMuted
 	}
 	return p.severityColor(s)
-}
-
-func offsetY(p *ui.Point) int {
-	if p == nil {
-		return -999
-	}
-	return int(p.Y)
 }
