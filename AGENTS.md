@@ -59,6 +59,21 @@ Copy-Item build/windows-amd64/SeeAll.exe SeeAll.exe -Force
 `build/` 和根目录的 exe 都在 `.gitignore` 里，不会进提交——所以打包是**交付**，
 提交只是记录。
 
+## 改配置文件和日志
+
+`%AppData%\SeeAll\seeall.json` 和 `logs/seeall.log` 也是应用**开着就在用**的东西。
+想改它们做验证（比如把 `vid` 换成别的值看失败路径），先停实例再等两秒：
+
+```powershell
+Get-Process SeeAll -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Seconds 2        # 句柄释放要一会儿，立刻改会撞上同一个文件
+```
+
+**改完必须读回来核对，别只看命令报没报错。** 被占用的文件上 `sed -i`、`rm`、
+`Copy-Item` 都可能什么也没做而退出码是 0，你以为恢复了、其实没恢复——下次启动就是
+「鼠标页面不显示」，然后又要从头查一遍。`sed -i` 尤其隐蔽：它写临时文件再改名，
+改名被拒时一样是 0。
+
 ## 测试的要求
 
 **只照抄实现逻辑的测试等于没测。** 写完问自己：这条测试能发现什么错误的改动？
