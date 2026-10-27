@@ -47,6 +47,9 @@ type instance struct {
 	started  bool
 	quit     chan struct{}
 	notified bool
+	// problem is the last thing written to the log, so that a condition that
+	// lasts does not repeat itself on every sample.
+	problem string
 }
 
 // Start implements plugin.Instance.
@@ -56,6 +59,7 @@ func (in *instance) Start() {
 	}
 	in.started = true
 	in.quit = make(chan struct{})
+	in.sampler.logf = in.env.Logf
 	in.sampler.init()
 	in.collect()
 	go func(quit <-chan struct{}) {
@@ -134,6 +138,13 @@ func (in *instance) collect() {
 			Severity: core.SeverityNone,
 		},
 	)
+	// Whatever was said about the graphics being gone is over once the sample
+	// stops reporting a problem — whether the card came back or the settings
+	// stopped pointing at one. Otherwise the next time it goes missing there
+	// would be nothing to say, because it would still equal the last line.
+	if m.GPUProblem == "" {
+		in.problem = ""
+	}
 	switch {
 	case m.HasGPU:
 		readings = append(readings, core.Reading{
@@ -156,6 +167,13 @@ func (in *instance) collect() {
 			Detail: m.GPUProblem,
 		})
 		status = core.StatusWarn
+		// Said in the log too: the page explains it, but a user asking "why is
+		// my GPU missing" looks at the log, and a line that recurs every few
+		// seconds is noisier than the problem.
+		if in.problem != m.GPUProblem {
+			in.problem = m.GPUProblem
+			in.env.Logf("system: %s", m.GPUProblem)
+		}
 	}
 
 	readings = append(readings, core.Reading{

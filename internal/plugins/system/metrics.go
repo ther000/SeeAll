@@ -40,3 +40,11 @@ type metrics struct {
 
 	Uptime time.Duration
 }
+
+// log writes a line, if anyone is listening. A sampler reports what it could
+// not read, which is otherwise invisible: the page simply has one card fewer.
+func (s *sampler) log(format string, args ...any) {
+	if s.logf != nil {
+		s.logf(format, args...)
+	}
+}

@@ -73,6 +73,11 @@ type sampler struct {
 	gpu      gpuAdapter
 	gpuFound bool
 	resolved bool
+
+	// logf records what the page cannot say: a counter the machine does not
+	// have is a reading missing from a page that otherwise looks fine, and
+	// nothing else would ever mention it.
+	logf func(format string, args ...any)
 }
 
 func (s *sampler) init() {
@@ -85,24 +90,34 @@ func (s *sampler) init() {
 func (s *sampler) initPerf() {
 	q := openQuery()
 	if q == nil {
+		s.log("system: 打不开性能计数器，网络与显卡读数都不会有")
 		return
 	}
 	// Every interface is summed, so the rates cover the machine rather than
 	// one adapter the user may not be using.
 	if q.add(`\Network Interface(*)\Bytes Received/sec`, true) {
 		s.netRx = q.counters[len(q.counters)-1]
+	} else {
+		s.log("system: 没有网络计数器，下载速率不会有")
 	}
 	if q.add(`\Network Interface(*)\Bytes Sent/sec`, true) {
 		s.netTx = q.counters[len(q.counters)-1]
+	} else {
+		s.log("system: 没有网络计数器，上传速率不会有")
 	}
 	if q.add(gpuEnginePath, true) {
 		s.gpuUtil = q.counters[len(q.counters)-1]
+	} else {
+		s.log("system: 没有 GPU 引擎计数器，占用不会有")
 	}
 	if q.add(gpuMemoryPath, true) {
 		s.vram = q.counters[len(q.counters)-1]
+	} else {
+		s.log("system: 没有显存计数器，显存不会有")
 	}
 	if len(q.counters) == 0 {
 		q.close()
+		s.log("system: 一个性能计数器都没有，网络和显卡读数都会缺")
 		return
 	}
 	s.perf = q

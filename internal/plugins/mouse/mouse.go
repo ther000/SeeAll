@@ -179,10 +179,9 @@ func (in *instance) ensureReaders() {
 	in.mu.Unlock()
 	if count == 0 && added == 0 {
 		in.mu.Lock()
-		in.problem = "没找到电量通道，确认接收器插好了"
 		in.hasFrame = false
 		in.mu.Unlock()
-		in.publish()
+		in.fail("没找到电量通道，确认接收器插好了")
 	}
 }
 
@@ -239,11 +238,20 @@ func (in *instance) dropReader(reader *hid.Reader) {
 	}
 }
 
+// fail records what went wrong, tells the panel and writes the log.
+//
+// Only a change is logged: ensureReaders runs every three seconds, so a
+// receiver that is not plugged in would otherwise repeat the same line forever
+// and the log would be one message with a thousand copies of itself. The panel
+// keeps showing the problem while it lasts; the log records when it started.
 func (in *instance) fail(text string) {
 	in.mu.Lock()
+	changed := in.problem != text
 	in.problem = text
 	in.mu.Unlock()
-	in.env.Logf("mouse: %s", text)
+	if changed {
+		in.env.Logf("mouse: %s", text)
+	}
 	in.publish()
 }
 

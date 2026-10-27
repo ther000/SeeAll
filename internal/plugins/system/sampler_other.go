@@ -12,7 +12,11 @@ import (
 // Other systems read what Go's runtime knows: the processor count and the
 // process's own memory use. A fuller sampler is what a port adds.
 
-type sampler struct{}
+type sampler struct {
+	// logf records what the page cannot say: a reading this platform does not
+	// have is one missing from a page that otherwise looks fine.
+	logf func(format string, args ...any)
+}
 
 func (s *sampler) init() {}
 
