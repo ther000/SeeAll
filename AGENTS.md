@@ -22,15 +22,18 @@ Go + MyGo 原生 UI，**没有 webview、没有前端构建、没有 JS**。别�
 
 4. **改了界面就出图看**：`go run ./cmd/preview -out docs`，它会渲染三页 PNG。
    数值全绿但画面被切是这类固定尺寸布局的典型失败方式，必须看。
-5. **重新打包**，每一次改动都要，没有例外：
+5. **改了代码就打包**：
 
    ```powershell
    go tool mygo build
    ```
 
-   出 `build/windows-amd64/`（exe + 安装包）。再同步根目录那个双击即用的
-   `SeeAll.exe`（见下）。产物不进版本库，所以**不打包就等于没交付**——
-   提交里说得再好，`build/` 里还是上一版。
+   出 `build/windows-amd64/`（exe + 安装包），再同步根目录那个双击即用的
+   `SeeAll.exe`（见下）。
+
+   改了代码（`.go`、`go.mod`、资源、图标）就要打，只看文档和注释不用。
+   产物不进版本库，所以**不打包就等于没交付**——提交里说得再好，
+   `build/` 里还是上一版。
 
 6. **同步文档**：用户可见的行为改 `README.md`，架构或约定改 `docs/design.md`，
    行为变更记到 `CHANGELOG.md` 的 `[未发布]`。改了面板就重出 `docs/*.png`。
@@ -40,7 +43,7 @@ Go + MyGo 原生 UI，**没有 webview、没有前端构建、没有 JS**。别�
 ## 打包
 
 `go tool mygo build` 出 `build/windows-amd64/`：`SeeAll.exe` 与
-`SeeAll Setup <版本> amd64.exe`。**每次改动后都要跑**，见流程第 5 步。
+`SeeAll Setup <版本> amd64.exe`。**改了代码就跑**，见流程第 5 步。
 
 根目录那个 `SeeAll.exe` 是给人双击的副本，跟 `build/` 里的不是同一个文件，
 **必须手工复制过去**，否则它还是上一版：
