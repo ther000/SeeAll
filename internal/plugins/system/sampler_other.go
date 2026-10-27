@@ -16,7 +16,7 @@ type sampler struct{}
 
 func (s *sampler) init() {}
 
-func (s *sampler) sample(disk string) metrics {
+func (s *sampler) sample(gpuKey string) metrics {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 	name, err := os.Hostname()

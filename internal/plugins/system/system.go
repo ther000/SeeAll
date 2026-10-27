@@ -1,5 +1,6 @@
 // Package system watches the computer SeeAll runs on: processor load,
-// memory, the drives, the battery and how long it has been up.
+// memory, the battery, the network, the graphics processor and how long it
+// has been up.
 package system
 
 import (
@@ -16,14 +17,17 @@ func Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		ID:              "system",
 		Name:            "本机",
-		Summary:         "CPU、内存、磁盘、电池、网络、GPU 与开机时长",
+		Summary:         "CPU、内存、电池、网络、GPU 与开机时长",
 		Kind:            plugin.KindSystem,
 		Icon:            "cpu",
 		DefaultInstance: "本机",
 		Interval:        2 * time.Second,
 		Settings: []plugin.Setting{
-			{Key: "disk", Label: "磁盘", Type: plugin.SettingText, Default: "C:",
-				Placeholder: "C:", Description: "要看剩余空间的盘符"},
+			// The list is filled in when the page is drawn: which cards a
+			// machine has is not known until it is running.
+			{Key: "gpu", Label: "GPU", Type: plugin.SettingChoice, Default: gpuAuto,
+				OptionsFor:  gpuChoices,
+				Description: "只统计这一张"},
 			{Key: "notify", Label: "电池提醒", Type: plugin.SettingBool, Default: "true"},
 		},
 	}
@@ -85,11 +89,7 @@ func (in *instance) Poll() { in.collect() }
 // collect samples the machine and publishes what it found.
 func (in *instance) collect() {
 	now := time.Now()
-	disk := in.env.Settings().Get("disk")
-	if disk == "" {
-		disk = "C:"
-	}
-	m := in.sampler.sample(disk)
+	m := in.sampler.sample(in.env.Settings().Get("gpu"))
 
 	status := core.StatusOK
 	readings := []core.Reading{
@@ -98,14 +98,6 @@ func (in *instance) collect() {
 		{ID: "mem", Label: "内存", Value: m.MemUsedPercent, Unit: core.UnitPercent,
 			Severity: loadSeverity(m.MemUsedPercent),
 			Detail:   core.FormatBytes(m.MemUsed) + " / " + core.FormatBytes(m.MemTotal)},
-	}
-	if m.DiskTotal > 0 {
-		used := 100 * (1 - m.DiskFree/m.DiskTotal)
-		readings = append(readings, core.Reading{
-			ID: "disk", Label: "磁盘 " + disk, Value: used, Unit: core.UnitPercent,
-			Severity: loadSeverity(used),
-			Detail:   core.FormatBytes(m.DiskFree) + " 可用 / " + core.FormatBytes(m.DiskTotal),
-		})
 	}
 	if m.HasBattery {
 		severity := core.SeverityOK
@@ -143,10 +135,11 @@ func (in *instance) collect() {
 			Severity: core.SeverityNone,
 		},
 	)
-	if m.HasGPU {
+	switch {
+	case m.HasGPU:
 		readings = append(readings, core.Reading{
 			ID: "gpu", Label: "GPU", Value: m.GPUPercent, Unit: core.UnitPercent,
-			Severity: loadSeverity(m.GPUPercent), Detail: "各引擎合计",
+			Severity: loadSeverity(m.GPUPercent), Detail: m.GPUName,
 		})
 		if m.VRAMTotal > 0 && m.VRAMUsed > 0 {
 			readings = append(readings, core.Reading{
@@ -156,6 +149,14 @@ func (in *instance) collect() {
 				Detail:   core.FormatBytes(m.VRAMUsed) + " / " + core.FormatBytes(m.VRAMTotal),
 			})
 		}
+	case m.GPUProblem != "":
+		// The user chose a card that is not there any more. The page says so
+		// in the place the reading would have taken.
+		readings = append(readings, core.Reading{
+			ID: "gpu", Label: "GPU", Text: "不可用", Severity: core.SeverityOffline,
+			Detail: m.GPUProblem,
+		})
+		status = core.StatusWarn
 	}
 
 	readings = append(readings, core.Reading{
@@ -163,8 +164,7 @@ func (in *instance) collect() {
 		Severity: core.SeverityNone,
 	})
 
-	switch {
-	case m.CPUPercent >= 90, m.MemUsedPercent >= 92, m.GPUPercent >= 95:
+	if m.CPUPercent >= 90 || m.MemUsedPercent >= 92 || (m.HasGPU && m.GPUPercent >= 95) {
 		status = core.StatusWarn
 	}
 

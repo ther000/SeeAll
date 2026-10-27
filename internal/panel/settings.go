@@ -135,22 +135,26 @@ func (a *App) settingField(c *ui.Context, p palette, in *app.Instance, def plugi
 			}
 		})
 	case plugin.SettingChoice:
-		values := make([]string, 0, len(def.Options))
-		lookup := map[string]string{}
-		for _, o := range def.Options {
-			values = append(values, o.Label)
-			lookup[o.Label] = o.Value
-		}
+		options := choiceOptions(def)
+		// A value the machine no longer offers — a graphics card that was
+		// taken out — stays in the row, with nothing to call it. Quietly
+		// showing another value would hide the reason the page beside it says
+		// the card is gone, and leave the user nothing to change.
 		current := drafts[def.Key]
-		chosen := current
-		for _, o := range def.Options {
-			if o.Value == current {
-				chosen = o.Label
-			}
+		if _, ok := labelOf(options, current); !ok && current != "" {
+			options = append(options, plugin.Option{Value: current, Label: missingChoice})
 		}
+		// A choice with nothing to choose — a machine with no graphics card
+		// to pick — is not a row: the page would be asking a question with one
+		// answer.
+		if len(options) < 2 {
+			return
+		}
+		labels, lookup := optionLabels(options)
+		shown, _ := labelOf(options, current)
 		controlRow(c, p, def.Label, def.Description, func() {
-			if ui.Select(c, &chosen, values).Label(def.Label).Changed() {
-				a.commit(in, def.Key, lookup[chosen])
+			if ui.Select(c, &shown, labels).Label(def.Label).Changed() {
+				a.commit(in, def.Key, lookup[shown])
 			}
 		})
 	default:
@@ -189,12 +193,49 @@ func controlRow(c *ui.Context, p palette, title, detail string, control func()) 
 		ui.Column(c).Grow(1).Gap(1).Children(func() {
 			ui.Text(c, title).FontSize(12)
 			if detail != "" {
-				ui.Text(c, detail).FontSize(11).TextColor(p.TextMuted)
+				// The detail wraps rather than running under the control on
+				// its right: a long one would be read as part of the choice.
+				ui.Text(c, detail).FontSize(11).TextColor(p.TextMuted).Wrap()
 			}
 		})
 		ui.Row(c).Shrink(0).AlignItems(ui.Center).Children(control)
 	})
 }
+
+// choiceOptions is what a choice offers right now. A setting whose list only
+// the running machine knows — the cards it has — fills it in here, once per
+// frame; the rest keep the list their manifest declared.
+func choiceOptions(def plugin.Setting) []plugin.Option {
+	if def.OptionsFor != nil {
+		return def.OptionsFor()
+	}
+	return def.Options
+}
+
+// optionLabels is the list of labels the drop-down shows, and the way back
+// from a label to the value it stands for.
+func optionLabels(options []plugin.Option) ([]string, map[string]string) {
+	labels := make([]string, 0, len(options))
+	lookup := make(map[string]string, len(options))
+	for _, o := range options {
+		labels = append(labels, o.Label)
+		lookup[o.Label] = o.Value
+	}
+	return labels, lookup
+}
+
+// labelOf finds the label a value is shown under.
+func labelOf(options []plugin.Option, value string) (string, bool) {
+	for _, o := range options {
+		if o.Value == value {
+			return o.Label, true
+		}
+	}
+	return "", false
+}
+
+// missingChoice is what a choice calls a value the machine no longer offers.
+const missingChoice = "未找到"
 
 func parsesNumber(s string) bool {
 	_, err := strconv.ParseFloat(strings.TrimSpace(s), 64)

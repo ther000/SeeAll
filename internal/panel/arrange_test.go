@@ -14,24 +14,24 @@ func TestArrangeOrdersPutsTheSavedOrderFirst(t *testing.T) {
 	readings := []core.Reading{
 		{ID: "cpu", Label: "CPU"},
 		{ID: "mem", Label: "内存"},
-		{ID: "disk", Label: "磁盘"},
+		{ID: "gpu", Label: "GPU"},
 	}
 
-	got := orderIDs(arrangeOrders(readings, []string{"disk", "cpu"}))
-	if want := []string{"disk", "cpu", "mem"}; !reflect.DeepEqual(got, want) {
+	got := orderIDs(arrangeOrders(readings, []string{"gpu", "cpu"}))
+	if want := []string{"gpu", "cpu", "mem"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("arranged order = %v, want %v", got, want)
 	}
 
 	// A saved ID the plugin no longer reports is skipped rather than shown as
 	// an empty card.
 	got = orderIDs(arrangeOrders(readings, []string{"gone", "mem"}))
-	if want := []string{"mem", "cpu", "disk"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"mem", "cpu", "gpu"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("order with a reading that went away = %v, want %v", got, want)
 	}
 
 	// Nothing saved leaves the plugin's own order.
 	got = orderIDs(arrangeOrders(readings, nil))
-	if want := []string{"cpu", "mem", "disk"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"cpu", "mem", "gpu"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("order without a saved one = %v, want %v", got, want)
 	}
 }

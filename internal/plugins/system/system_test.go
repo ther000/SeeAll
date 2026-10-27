@@ -34,6 +34,11 @@ func TestCollectPublishesTheCounters(t *testing.T) {
 			t.Errorf("the page has no %q reading: %v", want, snap.Readings)
 		}
 	}
+	// The drives are not watched: a partition's free space was one more
+	// number that never moved, and the page is for what does.
+	if _, ok := byID["disk"]; ok {
+		t.Errorf("the page still counts a drive: %v", snap.Readings)
+	}
 
 	// The machine running the test either has a GPU or does not; what must
 	// hold is that the pair agrees with itself.
@@ -81,5 +86,30 @@ func TestNetworkReadingsAreRates(t *testing.T) {
 		if !found {
 			t.Errorf("no %s reading", id)
 		}
+	}
+}
+
+// TestAChosenCardThatIsGoneIsSaidSo checks the settings page's GPU choice is
+// obeyed when the card leaves: the page says the card is not there rather than
+// quietly counting another one, which would be a number about the wrong
+// processor.
+func TestAChosenCardThatIsGoneIsSaidSo(t *testing.T) {
+	in := newTestInstance(t)
+	in.env.Settings().Set("gpu", "FFFF:0000#0")
+	in.collect()
+
+	snap := in.env.Snapshot()
+	gpu, ok := snap.Reading("gpu")
+	if !ok {
+		t.Fatalf("the page says nothing about the card it was told to watch: %v", snap.Readings)
+	}
+	if gpu.Text != "不可用" || gpu.Severity != core.SeverityOffline {
+		t.Errorf("the missing card reads %q / %v, want 不可用 / offline", gpu.Text, gpu.Severity)
+	}
+	if gpu.Detail == "" {
+		t.Error("the page does not say why the card reports nothing")
+	}
+	if snap.Status != core.StatusWarn {
+		t.Errorf("the page is %v, want a warning", snap.Status)
 	}
 }

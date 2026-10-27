@@ -114,7 +114,7 @@ func TestEveryOtherPageKeepsItsCards(t *testing.T) {
 		Primary: "cpu", Readings: []core.Reading{
 			{ID: "cpu", Label: "CPU", Value: 23, Unit: core.UnitPercent, Severity: core.SeverityOK},
 			{ID: "mem", Label: "内存", Value: 61, Unit: core.UnitPercent, Severity: core.SeverityOK},
-			{ID: "disk", Label: "磁盘 C:", Value: 78, Unit: core.UnitPercent, Severity: core.SeverityWarn},
+			{ID: "gpu", Label: "GPU", Value: 78, Unit: core.UnitPercent, Severity: core.SeverityWarn},
 		}})
 	p.SetSelected("system")
 	p.SetSize(Fit(1920, 1040, 1))
@@ -130,9 +130,9 @@ func TestEveryOtherPageKeepsItsCards(t *testing.T) {
 	if !ok {
 		t.Fatalf("the system page shows no memory reading: %v", tt.Texts())
 	}
-	disk, ok := tt.Find("磁盘 C:")
+	gpu, ok := tt.Find("GPU")
 	if !ok {
-		t.Fatalf("the system page shows no disk reading: %v", tt.Texts())
+		t.Fatalf("the system page shows no GPU reading: %v", tt.Texts())
 	}
 	if cpu.Y != mem.Y {
 		t.Errorf("CPU at y=%v and 内存 at y=%v are not a row of cards", cpu.Y, mem.Y)
@@ -140,10 +140,10 @@ func TestEveryOtherPageKeepsItsCards(t *testing.T) {
 	if mem.X <= cpu.X {
 		t.Errorf("内存 at x=%v is not beside CPU at x=%v", mem.X, cpu.X)
 	}
-	if disk.Y <= cpu.Y {
-		t.Errorf("磁盘 at y=%v did not start a new row under CPU at y=%v", disk.Y, cpu.Y)
+	if gpu.Y <= cpu.Y {
+		t.Errorf("GPU at y=%v did not start a new row under CPU at y=%v", gpu.Y, cpu.Y)
 	}
-	if disk.X != cpu.X {
-		t.Errorf("磁盘 at x=%v does not start the row at CPU's x=%v", disk.X, cpu.X)
+	if gpu.X != cpu.X {
+		t.Errorf("GPU at x=%v does not start the row at CPU's x=%v", gpu.X, cpu.X)
 	}
 }

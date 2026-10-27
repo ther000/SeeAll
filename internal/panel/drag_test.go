@@ -18,7 +18,7 @@ func TestDraggingACardReordersThePage(t *testing.T) {
 		Primary: "cpu", Readings: []core.Reading{
 			{ID: "cpu", Label: "CPU", Value: 23.4, Unit: core.UnitPercent, Severity: core.SeverityOK},
 			{ID: "mem", Label: "内存", Value: 61, Unit: core.UnitPercent, Severity: core.SeverityOK},
-			{ID: "disk", Label: "磁盘 C:", Value: 78, Unit: core.UnitPercent, Severity: core.SeverityWarn},
+			{ID: "gpu", Label: "GPU", Value: 78, Unit: core.UnitPercent, Severity: core.SeverityWarn},
 		}})
 	p.SetSize(Fit(1920, 1040, 1))
 	p.SetSelected("system")
@@ -28,35 +28,35 @@ func TestDraggingACardReordersThePage(t *testing.T) {
 	if !ok {
 		t.Fatalf("the page shows no CPU card: %v", tt.Texts())
 	}
-	disk, ok := tt.Find("磁盘 C:")
+	gpu, ok := tt.Find("GPU")
 	if !ok {
-		t.Fatalf("the page shows no disk card: %v", tt.Texts())
+		t.Fatalf("the page shows no GPU card: %v", tt.Texts())
 	}
 
-	// CPU is the first card; drag it onto the disk card's place.
-	dragCard(tt, cpu, disk)
+	// CPU is the first card; drag it onto the GPU card's place.
+	dragCard(tt, cpu, gpu)
 
-	// The page now leads with the disk card and the CPU card is where the
-	// disk card was.
+	// The page now leads with the GPU card and the CPU card is where the GPU
+	// card was.
 	again := ui.NewTester(func(c *ui.Context) { p.View(c) }, DesignWidth, DesignHeight)
-	disk2, ok := again.Find("磁盘 C:")
+	gpu2, ok := again.Find("GPU")
 	if !ok {
-		t.Fatalf("the page lost the disk card: %v", again.Texts())
+		t.Fatalf("the page lost the GPU card: %v", again.Texts())
 	}
 	cpu2, ok := again.Find("CPU")
 	if !ok {
 		t.Fatalf("the page lost the CPU card: %v", again.Texts())
 	}
-	if disk2.Y > cpu2.Y || (disk2.Y == cpu2.Y && disk2.X > cpu2.X) {
-		t.Errorf("磁盘 is at (%v, %v) and CPU at (%v, %v): the drag did not reorder them",
-			disk2.X, disk2.Y, cpu2.X, cpu2.Y)
+	if gpu2.Y > cpu2.Y || (gpu2.Y == cpu2.Y && gpu2.X > cpu2.X) {
+		t.Errorf("GPU is at (%v, %v) and CPU at (%v, %v): the drag did not reorder them",
+			gpu2.X, gpu2.Y, cpu2.X, cpu2.Y)
 	}
 
-	// The pointer landed on the disk card's centre, which is the right half of
-	// its cell: the CPU card goes after it. [mem disk cpu] would be the same
+	// The pointer landed on the GPU card's centre, which is the right half of
+	// its cell: the CPU card goes after it. [mem gpu cpu] would be the same
 	// move read the other way round, and is not what a user dragging onto the
 	// middle of a card sees.
-	want := []string{"mem", "disk", "cpu"}
+	want := []string{"mem", "gpu", "cpu"}
 	if got := h.CardOrder("system"); !reflect.DeepEqual(got, want) {
 		t.Errorf("the host remembers %v, want %v", got, want)
 	}

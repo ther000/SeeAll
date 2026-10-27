@@ -45,7 +45,14 @@ type pdhQuery struct {
 	counters []*pdhCounter
 }
 
-// open collects path into a query, and reports whether it worked. A counter
+// pdhInstance is one instance of a counter: the network interface or the
+// graphics adapter it belongs to, and what it read.
+type pdhInstance struct {
+	Name  string
+	Value float64
+}
+
+// add collects path into a query, and reports whether it worked. A counter
 // the machine does not have leaves the query open with the others: a machine
 // without a GPU still reports its network.
 func (q *pdhQuery) add(path string, array bool) bool {
@@ -102,8 +109,9 @@ func (q *pdhQuery) value(c *pdhCounter) (float64, bool) {
 	return v.Value, true
 }
 
-// instances reads one counter's value for each of its instances.
-func (q *pdhQuery) instances(c *pdhCounter) []float64 {
+// instanceValues reads one counter for each of its instances, named: an
+// adapter's counters have to be told from another's.
+func (q *pdhQuery) instanceValues(c *pdhCounter) []pdhInstance {
 	if c == nil || !c.array {
 		return nil
 	}
@@ -132,13 +140,14 @@ func (q *pdhQuery) instances(c *pdhCounter) []float64 {
 		value  float64
 	}
 	stride := int(unsafe.Sizeof(item{}))
-	out := make([]float64, 0, count)
+	out := make([]pdhInstance, 0, count)
 	for i := 0; i < int(count); i++ {
 		it := (*item)(unsafe.Pointer(&buf[i*stride]))
-		if it.status != 0 {
+		if it.status != 0 || it.name == nil {
 			continue
 		}
-		out = append(out, it.value)
+		name := syscall.UTF16ToString(unsafe.Slice(it.name, 256))
+		out = append(out, pdhInstance{Name: name, Value: it.value})
 	}
 	return out
 }

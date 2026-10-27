@@ -11,33 +11,18 @@ import (
 	"unsafe"
 )
 
-// Windows sampling through kernel32, with no cgo: GetSystemTimes for the
-// processor, GlobalMemoryStatusEx for memory, GetDiskFreeSpaceExW for a
-// drive, GetSystemPowerStatus for the battery and GetTickCount64 for the
-// uptime.
+// Windows sampling through kernel32 and pdh, with no cgo: GetSystemTimes for
+// the processor, GlobalMemoryStatusEx for memory, GetSystemPowerStatus for the
+// battery, GetTickCount64 for the uptime, and the performance counters for the
+// network's rates and the graphics processor's load and memory.
 
 var kernel32 = syscall.NewLazyDLL("kernel32.dll")
 
 var (
 	procGetSystemTimes       = kernel32.NewProc("GetSystemTimes")
 	procGlobalMemoryStatusEx = kernel32.NewProc("GlobalMemoryStatusEx")
-	procGetDiskFreeSpaceExW  = kernel32.NewProc("GetDiskFreeSpaceExW")
 	procGetSystemPowerStatus = kernel32.NewProc("GetSystemPowerStatus")
 	procGetTickCount64       = kernel32.NewProc("GetTickCount64")
-)
-
-var advapi32 = syscall.NewLazyDLL("advapi32.dll")
-
-var (
-	procRegOpenKeyEx    = advapi32.NewProc("RegOpenKeyExW")
-	procRegEnumKeyEx    = advapi32.NewProc("RegEnumKeyExW")
-	procRegQueryValueEx = advapi32.NewProc("RegQueryValueExW")
-	procRegCloseKey     = advapi32.NewProc("RegCloseKey")
-)
-
-const (
-	hkeyLocalMachine = 0x80000002
-	keyRead          = 0x00020019
 )
 
 type memoryStatusEx struct {
@@ -61,6 +46,10 @@ type systemPowerStatus struct {
 	BatteryFullLifeTime uint32
 }
 
+// missingCard is what the page says when the card the settings name is not in
+// the machine any more.
+const missingCard = "找不到这张显卡"
+
 type sampler struct {
 	prevIdle  uint64
 	prevTotal uint64
@@ -75,8 +64,15 @@ type sampler struct {
 	netTx   *pdhCounter
 	gpuUtil *pdhCounter
 	vram    *pdhCounter
-	// vramTotal is the adapter's memory, read from the registry once.
-	vramTotal float64
+
+	// gpuKey is the card the settings ask for and gpu the card that turned out
+	// to be it. The counters are read per adapter, so every sample has to know
+	// which one the page is about; the answer is kept until the setting
+	// changes, because enumerating the cards costs more than a sample.
+	gpuKey   string
+	gpu      gpuAdapter
+	gpuFound bool
+	resolved bool
 }
 
 func (s *sampler) init() {
@@ -99,10 +95,10 @@ func (s *sampler) initPerf() {
 	if q.add(`\Network Interface(*)\Bytes Sent/sec`, true) {
 		s.netTx = q.counters[len(q.counters)-1]
 	}
-	if q.add(`\GPU Engine(*)\Utilization Percentage`, true) {
+	if q.add(gpuEnginePath, true) {
 		s.gpuUtil = q.counters[len(q.counters)-1]
 	}
-	if q.add(`\GPU Local Adapter Memory(*)\Local Usage`, true) {
+	if q.add(gpuMemoryPath, true) {
 		s.vram = q.counters[len(q.counters)-1]
 	}
 	if len(q.counters) == 0 {
@@ -110,7 +106,6 @@ func (s *sampler) initPerf() {
 		return
 	}
 	s.perf = q
-	s.vramTotal = adapterMemory()
 	q.refresh()
 }
 
@@ -148,10 +143,10 @@ func (s *sampler) sampleCPU() {
 	}
 }
 
-func (s *sampler) sample(disk string) metrics {
+// sample reads the machine. gpuKey names the card the page is about: a key
+// from the settings page, or gpuAuto.
+func (s *sampler) sample(gpuKey string) metrics {
 	s.sampleCPU()
-	net, gpu, gpuOK := s.samplePerf()
-
 	m := metrics{
 		Hostname:       hostname(),
 		Platform:       fmt.Sprintf("Windows · %s/%s", runtime.GOOS, runtime.GOARCH),
@@ -165,23 +160,6 @@ func (s *sampler) sample(disk string) metrics {
 		m.MemTotal = float64(mem.TotalPhys)
 		m.MemUsed = float64(mem.TotalPhys - mem.AvailPhys)
 		m.MemUsedPercent = float64(mem.MemoryLoad)
-	}
-
-	if disk != "" {
-		path, err := syscall.UTF16PtrFromString(disk + "\\")
-		if err == nil {
-			var freeToCaller, total, free uint64
-			ok, _, _ := procGetDiskFreeSpaceExW.Call(
-				uintptr(unsafe.Pointer(path)),
-				uintptr(unsafe.Pointer(&freeToCaller)),
-				uintptr(unsafe.Pointer(&total)),
-				uintptr(unsafe.Pointer(&free)),
-			)
-			if ok != 0 {
-				m.DiskTotal = float64(total)
-				m.DiskFree = float64(free)
-			}
-		}
 	}
 
 	var power systemPowerStatus
@@ -201,60 +179,106 @@ func (s *sampler) sample(disk string) metrics {
 		m.Uptime = time.Duration(ticks) * time.Millisecond
 	}
 
-	m.NetRxRate, m.NetTxRate = net[0], net[1]
-	m.HasGPU = gpuOK
-	m.GPUPercent, m.VRAMUsed, m.VRAMTotal = gpu[0], gpu[1], gpu[2]
+	// The card is resolved whether or not the counters opened: a choice the
+	// machine cannot honour is worth saying even when nothing can be counted.
+	card, found := s.adapter(gpuKey)
+	if s.perf != nil && s.perf.refresh() {
+		net := s.sampleNet()
+		m.NetRxRate, m.NetTxRate = net[0], net[1]
+		s.sampleGPU(&m, card, found, gpuKey)
+	} else if !found && gpuKey != "" && gpuKey != gpuAuto {
+		m.GPUProblem = missingCard
+	}
 	return m
 }
 
-// samplePerf reads the performance counters and turns them into the network
-// rates and the graphics numbers.
-func (s *sampler) samplePerf() (net [2]float64, gpu [3]float64, gpuOK bool) {
-	if s.perf == nil || !s.perf.refresh() {
-		return net, gpu, false
-	}
-
+// sampleNet reads the network's byte rates.
+func (s *sampler) sampleNet() [2]float64 {
+	var net [2]float64
 	// Every interface is summed, adapters the user is not using included: the
 	// panel answers "how fast is this machine talking", not "how fast is one
 	// adapter". A disconnected adapter reports nothing.
-	net[0] = sum(s.perf.instances(s.netRx))
-	net[1] = sum(s.perf.instances(s.netTx))
+	for _, in := range s.perf.instanceValues(s.netRx) {
+		net[0] += in.Value
+	}
+	for _, in := range s.perf.instanceValues(s.netTx) {
+		net[1] += in.Value
+	}
+	return net
+}
+
+// sampleGPU fills the graphics numbers for the card the settings name.
+func (s *sampler) sampleGPU(m *metrics, card gpuAdapter, found bool, gpuKey string) {
+	if !found && gpuKey != "" && gpuKey != gpuAuto {
+		// The user picked a card this machine no longer has. Saying so is
+		// better than quietly counting another one.
+		m.GPUProblem = missingCard
+		return
+	}
+	// The name the settings row uses, so that the page and the row it comes
+	// from call the card the same thing: the driver's full string has the
+	// vendor word and the trademark marks in it.
+	m.GPUName = shortGPUName(card.Name)
+	if m.GPUName == "" {
+		// No card could be enumerated: the counters are still there, and the
+		// machine's graphics are worth showing without naming them.
+		m.GPUName = "显卡"
+	}
 
 	// The engines of a graphics processor each report their own utilization,
-	// and Task Manager's number is their sum. Loopback and software engines
-	// are not work the GPU did.
-	engines := s.perf.instances(s.gpuUtil)
-	if len(engines) > 0 {
-		gpuOK = true
-		gpu[0] = clampPercent(sum(engines))
-	}
-	// A virtual display adapter sits beside the real one and reports nothing,
-	// so the adapter with the most memory in use is the one to show.
-	used := maxOf(s.perf.instances(s.vram))
-	if used > 0 && s.vramTotal > 0 {
-		gpuOK = true
-		gpu[1] = used
-		gpu[2] = s.vramTotal
-	}
-	return net, gpu, gpuOK
-}
-
-func sum(values []float64) float64 {
-	var total float64
-	for _, v := range values {
-		total += v
-	}
-	return total
-}
-
-func maxOf(values []float64) float64 {
-	var best float64
-	for _, v := range values {
-		if v > best {
-			best = v
+	// and Task Manager's number is their sum. Another adapter's engines are
+	// another card's work.
+	var busy float64
+	for _, in := range s.perf.instanceValues(s.gpuUtil) {
+		if card.isOurs(in.Name) {
+			busy += in.Value
 		}
 	}
-	return best
+	m.GPUPercent = clampPercent(busy)
+
+	// A virtual display adapter sits beside the real one and reports nothing,
+	// so the card's own memory is read rather than the largest of them all.
+	for _, in := range s.perf.instanceValues(s.vram) {
+		if card.isOurs(in.Name) && in.Value > m.VRAMUsed {
+			m.VRAMUsed = in.Value
+		}
+	}
+	m.VRAMTotal = card.Memory
+	m.HasGPU = true
+}
+
+// adapter resolves the card the page reports on: the one the settings name, or
+// the largest when they ask for automatic. A machine whose cards cannot be
+// enumerated resolves to none, and the counters are then read for the machine
+// as a whole.
+func (s *sampler) adapter(key string) (gpuAdapter, bool) {
+	if key == "" {
+		key = gpuAuto
+	}
+	if s.resolved && s.gpuKey == key {
+		return s.gpu, s.gpuFound
+	}
+	cards := graphicsAdapters()
+	var chosen gpuAdapter
+	found := false
+	if key != gpuAuto {
+		chosen, found = findAdapter(cards, key)
+		if !found {
+			// The list was read once; a card that was plugged in or switched
+			// back on since is worth finding, and finding out it is really
+			// gone is worth a second look too.
+			chosen, found = findAdapter(refreshAdapters(), key)
+		}
+	}
+	if !found && key == gpuAuto {
+		for _, c := range cards {
+			if !found || c.Memory > chosen.Memory {
+				chosen, found = c, true
+			}
+		}
+	}
+	s.gpuKey, s.gpu, s.gpuFound, s.resolved = key, chosen, found, true
+	return chosen, found
 }
 
 func clampPercent(v float64) float64 {
@@ -273,4 +297,14 @@ func hostname() string {
 		return "本机"
 	}
 	return name
+}
+
+// findAdapter looks a card up by the key the settings hold.
+func findAdapter(cards []gpuAdapter, key string) (gpuAdapter, bool) {
+	for _, c := range cards {
+		if c.Key == key {
+			return c, true
+		}
+	}
+	return gpuAdapter{}, false
 }

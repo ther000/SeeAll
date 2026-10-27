@@ -12,9 +12,6 @@ type metrics struct {
 	MemUsed        float64
 	MemUsedPercent float64
 
-	DiskTotal float64
-	DiskFree  float64
-
 	HasBattery     bool
 	BatteryPercent float64
 	Charging       bool
@@ -26,12 +23,16 @@ type metrics struct {
 	NetRxRate float64
 	NetTxRate float64
 
-	// HasGPU is false on a machine whose graphics cannot be counted, a
-	// session without a GPU process, or a system That reports no counters.
+	// HasGPU is false on a machine whose graphics cannot be counted, or on
+	// the card the settings name when it is no longer there.
 	HasGPU bool
 	// GPUPercent is how busy the graphics processor is: the sum of its
 	// engines' utilization, as Task Manager shows it.
 	GPUPercent float64
+	// GPUName is the card those numbers are about.
+	GPUName string
+	// GPUProblem says why a card the user chose reports nothing.
+	GPUProblem string
 	// VRAMUsed and VRAMTotal are the graphics memory in use and the one the
 	// adapter has.
 	VRAMUsed  float64

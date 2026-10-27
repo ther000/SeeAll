@@ -35,6 +35,10 @@ type Setting struct {
 	Default     string
 	Placeholder string
 	Options     []Option
+	// OptionsFor fills Options in when the page is drawn, for a list only the
+	// running machine knows: the graphics cards it has. It is asked on every
+	// frame the settings are built, so it must be cheap or cache its answer.
+	OptionsFor func() []Option
 	// Secret marks a value the settings page hides, such as a token.
 	Secret bool
 }

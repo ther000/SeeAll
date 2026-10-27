@@ -19,15 +19,15 @@ func TestCardOrderSurvivesARestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.Stop()
-	h.SetCardOrder("system", []string{"disk", "cpu", "mem"})
+	h.SetCardOrder("system", []string{"gpu", "cpu", "mem"})
 
 	again := app.NewHost(dir)
 	if err := again.Load(); err != nil {
 		t.Fatal(err)
 	}
 	again.Stop()
-	if got := again.CardOrder("system"); !reflect.DeepEqual(got, []string{"disk", "cpu", "mem"}) {
-		t.Errorf("after a restart the order is %v, want [disk cpu mem]", got)
+	if got := again.CardOrder("system"); !reflect.DeepEqual(got, []string{"gpu", "cpu", "mem"}) {
+		t.Errorf("after a restart the order is %v, want [gpu cpu mem]", got)
 	}
 }
 
@@ -37,7 +37,7 @@ func TestCardOrderSurvivesARestart(t *testing.T) {
 func TestDroppingACardKeepsTheOtherPagesAlone(t *testing.T) {
 	h, p := fixture(t)
 	p.SetSize(Fit(1920, 1040, 1))
-	h.SetCardOrder("system", []string{"disk", "cpu"})
+	h.SetCardOrder("system", []string{"gpu", "cpu"})
 	p.SetSelected("mouse")
 	tt := ui.NewTester(func(c *ui.Context) { p.View(c) }, DesignWidth, DesignHeight)
 	if _, ok := tt.Find("Rapoo Gaming Device"); !ok {

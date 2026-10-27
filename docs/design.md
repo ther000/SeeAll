@@ -78,7 +78,7 @@ type Reading struct {
 	Unit      Unit      // %, ms, bit/s, °C, 天……
 	Text      string    // 有它就显示文字，不显示数字
 	Severity  Severity  // none / ok / info / warn / critical / offline
-	Detail    string    // 副行：「2 秒前」「212 GB 可用 / 953 GB」
+	Detail    string    // 副行：「2 秒前」「2.1 GB / 5.9 GB」
 	At        time.Time
 }
 ```
@@ -117,15 +117,24 @@ Height = round(840 / scale)
 - **标签页**（`tabs`）：`ui.TabsBase` 自绘，每项 `Grow(1)` 等宽；选中项白底描边，
   状态非「正常」时标签上带彩点——一次只看得到一页，别页的异常得有地方露。
 - **页面**：`detail` 有两种排法，由 `Manifest.Combined` 决定。
-  - 默认：每个读数一张卡（`ui.Grid` 两列），**全部等高**（`ReadingCardH`，`Height` +
+  - 默认：每个读数一张卡（`ui.GridView` 两列），**全部等高**（`ReadingCardH`，`Height` +
     `MaxHeight` 夹死，所以有没有说明行都是同一个高度）。卡里标签和折线共用顶行
     （折线居右，`trendWidth`×`trendHeight` 的固定位置，没有折线也占位），下面依次是值与说明。
-    插件指定的主读数排第一张，字号大一号。适合读数在量不同东西的页面（本机：CPU、内存、磁盘、
-    网络上下行、GPU、显存）。
+    **卡片可以拖着排序**：`GridView` 的 `GridState.Reorder` 给出新的顺序，`Host.SetCardOrder`
+    按实例存进配置文件的 `order`。插件后来新增的读数接在排过的后面，不再报的自动跳过
+    （`arrangeOrders`）——插件升级不该冲掉用户排好的部分。
+    `GridView` 会在单元格四周各留 2 DIP，页面把这个宽度从 padding 里扣掉，卡片文字才和
+    别的页落在那条统一的竖线上（`align_test.go` 抓的就是这 2 px）。
+    插件指定的主读数排第一张，字号大一号。适合读数在量不同东西的页面（本机：CPU、内存、
+    电池、网络上下行、GPU、显存、开机时长）。
   - `Combined`：整页一张卡——设备名（`Snapshot.Title`）横在顶部，主读数（`headline`，只有环或数字）
     在左，其余读数（`inlineReading`，「标签 … 值」一行一条）在右。不画折线、不写 caption：
     环和数字已经说完了。适合读数描述同一个东西的页面（鼠标：电量、连接、DPI）。
   - `settings` 是长表单，滚动。
+
+设置项的 `Options` 是静态的；`Setting.OptionsFor` 留给只有运行时才知道的列表
+（显卡那张卡），设置页每帧问一次。**只有一项可选的 choice 不出现**——一个只有一个答案的
+问题不是问题，没有显卡的机器就不该有「监控哪张显卡」这一行。
 
 设置页的「添加」卡片列出**当前没有实例的插件**，所以移除掉的那一项从这里加回来。
 `Host.Remove` 把它当时的设置写进配置文件的 `removed`，`Host.Add` 拿到 `nil` 取值时
@@ -166,12 +175,20 @@ Height = round(840 / scale)
 - HID 读取只有 Windows 实现，其他平台编译通过但鼠标插件报没有通道。
 - 网络速率、GPU 占用与显存只有 Windows 实现：它们走 `pdh.dll` 的性能计数器
   （`\Network Interface(*)\Bytes Received/sec`、`\GPU Engine(*)\Utilization Percentage`、
-  `\GPU Local Adapter Memory(*)\Local Usage`）。其他平台的 `sampler` 不填这几项，
+  `\GPU Adapter Memory(*)\Dedicated Usage`）。其他平台的 `sampler` 不填这几项，
   插件就不报对应的读数。
-- 显存总量取自注册表 `HardwareInformation.qwMemorySize`：WMI 的 `AdapterRAM` 是 32 位，
-  超过 4 GB 的卡会回绕（本机 6 GB 的 3060 会被报成 4 GB）。
-- GPU 占用是各引擎利用率的**求和**（与任务管理器一致），不是平均值；虚拟显示适配器
-  没有引擎数据，不会参与。
+- **显卡是按 LUID 分开读的**。性能计数器把每张卡的每个引擎都放在同一个计数器里，实例名
+  是 `pid_12772_luid_0x00000000_0x0000E3CD_phys_0_eng_0_engtype_3D`；不认这个 LUID，
+  求和出来的是「所有卡加起来」。设置页选中哪张卡，就只累加那张卡的实例。
+- 显卡列表走 DXGI（`CreateDXGIFactory1` + `EnumAdapters1` + `GetDesc1`），与任务管理器
+  「性能」页同一份来源：名字、显存（`DedicatedVideoMemory`）、LUID 都在 `DXGI_ADAPTER_DESC1` 里。
+  不用注册表 `HardwareInformation.qwMemorySize` 了——那是按驱动实例排的，和计数器的 LUID
+  对不上，同一块卡在 DXGI 里还可能列出两次。
+- 只有**有引擎计数**的适配器才出现在选择里：DXGI 会把同一块 3060 列两次（一个没有引擎），
+  也可能列一张已禁用的卡，选进去就是一行永远 0% 的读数。
+- GPU 占用是所选卡各引擎利用率的**求和**（与任务管理器一致），不是平均值；软件渲染适配器
+  （`DXGI_ADAPTER_FLAG_SOFTWARE`）不列出来。
+- 磁盘读数已经移除：一个盘符的剩余空间在这块面板上不是会变的东西。
 - 自带只有鼠标和本机两个插件：插件化是给后续监控对象留的口子，不是一次塞满托盘。
 
 ## 验证过的事

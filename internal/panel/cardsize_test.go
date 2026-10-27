@@ -23,8 +23,8 @@ func TestReadingsShareOneCardSize(t *testing.T) {
 				Severity: core.SeverityOK, Detail: "16 核"},
 			{ID: "mem", Label: "内存", Value: 61, Unit: core.UnitPercent,
 				Severity: core.SeverityOK, Detail: "19.4 GB / 31.8 GB"},
-			{ID: "disk", Label: "磁盘 C:", Value: 78, Unit: core.UnitPercent,
-				Severity: core.SeverityWarn, Detail: "212 GB 可用 / 953 GB"},
+			{ID: "gpu", Label: "GPU", Value: 78, Unit: core.UnitPercent,
+				Severity: core.SeverityWarn, Detail: "GeForce RTX 3060 Laptop GPU"},
 			{ID: "uptime", Label: "开机", Text: "2.4 h", Severity: core.SeverityNone},
 		}})
 	p.SetSize(Fit(1920, 1040, 1))
@@ -33,7 +33,7 @@ func TestReadingsShareOneCardSize(t *testing.T) {
 
 	// Each card's own top is its label's top; its bottom is the card's, which
 	// the row below its label starts.
-	labels := []string{"CPU", "内存", "磁盘 C:", "开机"}
+	labels := []string{"CPU", "内存", "GPU", "开机"}
 	rows := map[float32][]float32{}
 	for _, name := range labels {
 		r, ok := tt.Find(name)
