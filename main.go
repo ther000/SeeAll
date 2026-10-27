@@ -9,7 +9,6 @@ import (
 	"image/color"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -18,6 +17,7 @@ import (
 	"seeall/internal/console"
 	"seeall/internal/core"
 	"seeall/internal/panel"
+	"seeall/internal/paths"
 	"seeall/internal/plugin"
 	"seeall/internal/tray"
 )
@@ -49,19 +49,23 @@ func main() {
 	}
 	mygo.App.SetName("SeeAll")
 
-	if dir, err := mygo.App.Path(mygo.PathLogs); err == nil {
-		if f, err := os.OpenFile(filepath.Join(dir, "seeall.log"),
-			os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
+	// Everything the app writes lives beside the executable, so the folder
+	// can be copied or removed as one thing.
+	if path, err := paths.Log(); err == nil {
+		if f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
 			log.SetOutput(f)
 			defer f.Close()
 		}
 	}
 
-	dataDir, err := mygo.App.Path(mygo.PathUserData)
+	dataDir, err := paths.Data()
 	if err != nil {
 		dataDir = "."
 	}
 	s.host = app.NewHost(dataDir)
+	// A settings file left in the per-user folder by an earlier build is taken
+	// over once, so that moving where the app writes costs the user nothing.
+	s.host.AdoptLegacySettings()
 	s.host.Logf = func(format string, args ...any) { log.Printf(format, args...) }
 	s.panel = panel.New(s.host)
 	s.panel.Select = func(string) { s.refresh() }
@@ -413,8 +417,8 @@ func (s *state) buildMenu() *mygo.Menu {
 			s.show()
 		}},
 		&mygo.MenuItem{Label: "打开日志", Click: func(*mygo.MenuItem, *mygo.Window) {
-			if dir, err := mygo.App.Path(mygo.PathLogs); err == nil {
-				mygo.Shell.ShowItemInFolder(filepath.Join(dir, "seeall.log"))
+			if path, err := paths.Log(); err == nil {
+				mygo.Shell.ShowItemInFolder(path)
 			}
 		}},
 		mygo.Separator(),

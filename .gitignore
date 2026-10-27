@@ -4,6 +4,11 @@
 /build/
 /dist/
 
+# 运行时数据：配置和日志就在 exe 旁边，所以在仓库根目录跑一下就会长出来
+/seeall.json
+/seeall.json.*
+/logs/
+
 # 开发期临时目录
 /.preview/
 

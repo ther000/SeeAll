@@ -56,6 +56,7 @@ type Instance interface {
 ```go
 host := app.NewHost(dataDir)   // 带内置插件
 host.Load()                    // 读 seeall.json；没有就按默认插件各建一个实例
+host.AdoptLegacySettings()     // 只有真程序调：接管旧版留在 %AppData% 的设置
 host.Instances() []*Instance   // 侧栏顺序
 host.Instance(id) *Instance
 host.Refresh(); host.RefreshOne(id)

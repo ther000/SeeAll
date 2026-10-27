@@ -5,6 +5,15 @@
 
 ## [未发布]
 
+### 变更
+
+- **配置和日志改放在 exe 同目录**：`seeall.json` 与 `logs\seeall.log` 跟
+  `SeeAll.exe` 一起，整个应用是一个可以整体拷走或删除的文件夹。安装包装在
+  `%LOCALAPPDATA%\Programs\SeeAll`，用户自己的目录，写权限没问题；从只读位置
+  运行（比如网络共享）时会退回 `%AppData%\SeeAll` 而不会启动失败。
+- 从旧版升级会自动接管 `%AppData%\SeeAll\seeall.json`：监控项、卡片顺序、
+  不透明度都跟着过来，旧文件读完后改名成 `.migrated`，不会在清空面板后又被读回来。
+
 ### 新增
 
 - 设置页的「不透明度」滑块：整个面板可在 40%–100% 之间调淡（Windows 走

@@ -63,6 +63,10 @@ type Host struct {
 	byID      map[string]*Instance
 	storePath string
 	saved     fileState
+	// adoptLegacy lets Load take over a pre-move settings file from the
+	// per-user folder. It is off unless the app asks: a host pointed at any
+	// other folder — a test's temporary one — must see only what is there.
+	adoptLegacy bool
 
 	// OnChange runs after a snapshot or a setting changes, on the goroutine
 	// that changed it. The UI sets it to repaint.
@@ -387,10 +391,13 @@ func (h *Host) readState() (fileState, error) {
 	var state fileState
 	data, err := os.ReadFile(h.storePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return state, nil
+		if !os.IsNotExist(err) {
+			return state, err
 		}
-		return state, err
+		if h.adoptLegacy {
+			return h.adoptLegacyState()
+		}
+		return state, nil
 	}
 	if err := json.Unmarshal(data, &state); err != nil {
 		// A corrupt file is renamed rather than thrown away, so the user
@@ -399,6 +406,65 @@ func (h *Host) readState() (fileState, error) {
 		return fileState{}, nil
 	}
 	return state, nil
+}
+
+// userConfigDir is os.UserConfigDir, replaceable by tests that must not touch
+// the machine's real one.
+var userConfigDir = os.UserConfigDir
+
+// AdoptLegacySettings turns on the one-time move of a settings file written by
+// a build that kept its files in the per-user folder. Only the real app calls
+// it: a host made for a test must not read the machine's own settings.
+func (h *Host) AdoptLegacySettings() { h.adoptLegacy = true }
+
+// adoptLegacyState reads the settings a build that kept its files in the
+// per-user folder left there, and marks that file as taken.
+//
+// It runs only when the app's own file is missing, and it moves the old one
+// aside as it reads it. Marking it is what makes this a move rather than a
+// fallback: a user who empties their panel on purpose must not have the old
+// file's monitors come back at the next launch, and only a file that has not
+// been taken yet can be a first-run migration.
+func (h *Host) adoptLegacyState() (fileState, error) {
+	var state fileState
+	legacy := h.legacyStorePath()
+	if legacy == "" {
+		return state, nil
+	}
+	data, err := os.ReadFile(legacy)
+	if err != nil {
+		return state, nil
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return fileState{}, nil
+	}
+	// Taken. A file that cannot be moved is left alone rather than read
+	// again next launch: the settings already came across.
+	_ = os.Rename(legacy, legacy+".migrated")
+	return state, nil
+}
+
+// legacyStorePath is where a build that kept its files in the per-user folder
+// wrote the settings, or "" when that is the same place the app uses now.
+func (h *Host) legacyStorePath() string {
+	userConfig, err := userConfigDir()
+	if err != nil {
+		return ""
+	}
+	old := filepath.Join(userConfig, "SeeAll", "seeall.json")
+	if samePath(old, h.storePath) {
+		return ""
+	}
+	return old
+}
+
+// samePath reports whether two paths name the same file, allowing for the
+// slashes and letter case Windows treats as the same.
+func samePath(a, b string) bool {
+	clean := func(p string) string {
+		return strings.ToLower(filepath.ToSlash(filepath.Clean(p)))
+	}
+	return clean(a) == clean(b)
 }
 
 // save writes the settings file. It runs on whichever goroutine changed
