@@ -65,6 +65,13 @@ func main() {
 	s.host.Logf = func(format string, args ...any) { log.Printf(format, args...) }
 	s.panel = panel.New(s.host)
 	s.panel.Select = func(string) { s.refresh() }
+	// The slider fades the window as it is dragged; the value is already on
+	// its way to the settings file from the panel.
+	s.panel.OnOpacity = func(v float64) {
+		if s.win != nil {
+			s.win.SetOpacity(v)
+		}
+	}
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		s.quitting = true
@@ -91,6 +98,9 @@ func (s *state) ready() {
 		}
 	}
 	s.host.OnChange = s.refresh
+	// The panel was made before the settings file was read, so how solid it
+	// should be is only known now.
+	s.panel.SyncOpacity()
 
 	// Apply the saved choice; a machine that has never run SeeAll starts
 	// with it on, as the panel's switch shows.
@@ -141,6 +151,7 @@ func (s *state) createWindow() {
 
 	s.win = mygo.NewWindow(mygo.WindowOptions{
 		Title:             "SeeAll",
+		Opacity:           s.panel.Opacity,
 		Width:             s.metrics.Width,
 		Height:            s.metrics.Height,
 		X:                 x,
@@ -156,6 +167,7 @@ func (s *state) createWindow() {
 		BackgroundColor:   "light-dark(#fafafa, #17171a)",
 		Content:           panel.Content(s.panel),
 	})
+	s.win.SetOpacity(s.panel.Opacity)
 	s.win.OnBlur(s.win.Hide)
 	s.win.OnClose(func(e *mygo.CloseEvent) {
 		// Alt+F4 and Escape put the panel away; quitting still closes it.

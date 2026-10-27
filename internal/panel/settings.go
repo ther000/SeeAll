@@ -38,6 +38,8 @@ func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
 					c.Toast("已刷新全部监控项")
 				}
 			})
+			hline(c, p)
+			a.opacityRow(c, p)
 		})
 
 		for _, in := range a.sorted(instances) {
@@ -46,6 +48,46 @@ func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
 
 		a.addCard(c, p)
 	})
+}
+
+// opacityRow is how solid the panel is. It is "不透明度" rather than
+// "透明度" because 100% has to mean "the panel as it always was": a
+// transparency of 100% would be an invisible panel, which nothing else on this
+// page offers.
+//
+// The window fades while the pointer is down, so the person dragging sees what
+// they are choosing; the value is written to the file once they let go, rather
+// than on every frame of a drag.
+func (a *App) opacityRow(c *ui.Context, p palette) {
+	ui.Column(c).Gap(6).Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "不透明度").FontSize(12).Grow(1)
+			ui.Text(c, fmt.Sprintf("%d%%", int(a.Opacity*100+0.5))).FontSize(12).
+				TextColor(p.TextMuted).Width(34).TextAlign(ui.End)
+		})
+		value := a.Opacity * 100
+		// The control is named for what it does rather than for the row it
+		// sits in: assistive technology reads "面板不透明度" beside the number.
+		slider := ui.Slider(c, &value, app.MinPanelOpacity*100, 100).Label("面板不透明度").
+			Step(1).FillWidth()
+		if slider.Changed() {
+			a.setOpacity(value/100, slider.Pressed())
+		} else if !slider.Pressed() && a.opacityDirty {
+			a.setOpacity(a.Opacity, false)
+		}
+	})
+}
+
+// setOpacity asks the window to fade now, and remembers the value once the
+// user has finished choosing it.
+func (a *App) setOpacity(v float64, dragging bool) {
+	a.Opacity = clamp01(v)
+	a.OnOpacity(a.Opacity)
+	a.opacityDirty = true
+	if !dragging {
+		a.opacityDirty = false
+		a.Host.SetPanelOpacity(a.Opacity)
+	}
 }
 
 // instanceCard is one monitor's settings: the fields its plugin declares,

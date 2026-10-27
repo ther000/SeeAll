@@ -34,16 +34,36 @@ type App struct {
 	// grids keeps each instance's card grid, which remembers the order its
 	// cards were dragged into.
 	grids map[string]*ui.GridState
+
+	// Opacity is how solid the settings page is drawing the panel, from 0 to
+	// 1. A drag changes it while the pointer is down; OnOpacity is what makes
+	// the window follow, and the file is written once the pointer is up.
+	Opacity float64
+	// OnOpacity is called while the slider moves, so the window fades as the
+	// user drags rather than when they let go.
+	OnOpacity func(float64)
+	// opacityDirty is set while a drag has changed the value but not saved it.
+	opacityDirty bool
 }
 
 // New makes the panel's state.
 func New(host *app.Host) *App {
 	return &App{
-		Host:     host,
-		selected: host.LastInstance(),
-		drafts:   map[string]string{},
-		Size:     Fit(1920, 1040, 1),
+		Host:      host,
+		selected:  host.LastInstance(),
+		drafts:    map[string]string{},
+		Size:      Fit(1920, 1040, 1),
+		Opacity:   host.PanelOpacity(),
+		OnOpacity: func(float64) {},
 	}
+}
+
+// SyncOpacity reads how solid the panel should be from the host, which is what
+// the app calls once the settings file has been read: the panel is made before
+// the file, so its value is the default until then.
+func (a *App) SyncOpacity() {
+	a.Opacity = a.Host.PanelOpacity()
+	a.OnOpacity(a.Opacity)
 }
 
 // SetSize changes the panel's size, as another display asks for.

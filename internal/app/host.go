@@ -419,6 +419,9 @@ type savedEntry struct {
 type savedUI struct {
 	LastInstance string `json:"lastInstance"`
 	StartAtLogin *bool  `json:"startAtLogin"`
+	// Opacity is how solid the panel is, from MinPanelOpacity to 1; nil on a
+	// file written before the slider existed, which means opaque.
+	Opacity *float64 `json:"opacity,omitempty"`
 }
 
 func (h *Host) readState() (fileState, error) {
@@ -488,6 +491,50 @@ func (h *Host) SetStartAtLogin(on bool) {
 	h.saved.UI.StartAtLogin = &on
 	h.mu.Unlock()
 	h.save()
+}
+
+// MinPanelOpacity is how faint the panel may get. Below it the text stops
+// being readable, and a panel the user cannot read is worse than one they
+// cannot see through.
+const MinPanelOpacity = 0.4
+
+// PanelOpacity returns how solid the panel is, from MinPanelOpacity to 1.
+func (h *Host) PanelOpacity() float64 {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if h.saved.UI.Opacity == nil {
+		return 1
+	}
+	return clampOpacity(*h.saved.UI.Opacity)
+}
+
+// SetPanelOpacity remembers how solid the panel is.
+func (h *Host) SetPanelOpacity(v float64) {
+	h.mu.Lock()
+	value := clampOpacity(v)
+	if h.saved.UI.Opacity != nil && *h.saved.UI.Opacity == value {
+		h.mu.Unlock()
+		return
+	}
+	h.saved.UI.Opacity = &value
+	h.mu.Unlock()
+	h.save()
+	h.OnChange()
+}
+
+// ClampOpacityForTest is clampOpacity, for the panel's tests to check the
+// floor a slider cannot cross.
+func ClampOpacityForTest(v float64) float64 { return clampOpacity(v) }
+
+// clampOpacity keeps a panel solid enough to read.
+func clampOpacity(v float64) float64 {
+	if v < MinPanelOpacity {
+		return MinPanelOpacity
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 // LastInstance returns the instance the panel showed last, or "".
