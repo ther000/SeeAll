@@ -142,11 +142,21 @@ func (s *Settings) All() map[string]string {
 }
 
 // Load replaces the values with saved ones, keeping defaults for the rest.
+//
+// A saved key the manifest no longer declares is dropped rather than kept: a
+// setting the plugin stopped offering is not a setting, and carrying it in the
+// file forever would make every rename a small leak.
 func (s *Settings) Load(values map[string]string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	known := make(map[string]bool, len(s.defs))
+	for _, d := range s.defs {
+		known[d.Key] = true
+	}
 	for k, v := range values {
-		s.values[k] = v
+		if known[k] {
+			s.values[k] = v
+		}
 	}
 }
 
