@@ -102,7 +102,7 @@ internal/tray/              托盘图标与面板定位
 cmd/preview/                不用窗口把各页渲染成 PNG（文档图就是这么来的）
 cmd/icon/                   生成 resources/icon.png
 cmd/diag/                   HID 列设备与抓包（协议验证用）
-tools/shot.ps1              截活动窗口（开发核对用）
+AGENTS.md                   给 AI agent 的仓库说明（命令、坑、约定）
 ```
 
 架构约定见 [docs/design.md](docs/design.md)。
