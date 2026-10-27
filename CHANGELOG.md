@@ -14,6 +14,8 @@
 
 ### 修复
 
+- 移除一个监控项后，它在配置文件 `order` 里的卡片顺序会跟着清掉。原来会留着，
+  加回来的时候卡片顺序属于一个已经不存在的实例。
 - 通知一弹就栈溢出：`Host.Load` 把 `OnNotify` 设成一个又调 `Host.Notify` 的函数，
   而 `Notify` 调的正是 `OnNotify`——第一次低电量提醒会让进程崩掉。
 - 设置页那一行「通知」右边画的是「全部刷新」按钮，标签和控件对不上，点下去的却是
@@ -29,6 +31,9 @@
   连同 `Host.Summaries`、`Snapshot.Worst`、`Ring.Len/Last/Clear` 这几具没人调用的尸体。
 - 读数单位只留下真有格式化规则的六个（%、B、bit/s、ms、s）：其余七个（Hz、°C、W、rpm、
   天、V、min）没有任何插件报，默认分支本来就能把 `Unit("W")` 写成 "45 W"。
+- `Env.Context()`、`Env.Closed()`、`Env.Stop()` 删掉了。它们串起一条 context 链，
+  但唯一的读取方（`Context` 与 `Closed`）没有任何调用者：`Stop()` 取消一个没人观察的
+  context，等于什么也没做。插件的退出由 `Instance.Stop()` 负责，本来就够。
 
 ### 变更
 

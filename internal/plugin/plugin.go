@@ -7,7 +7,6 @@
 package plugin
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -114,19 +113,14 @@ type Env struct {
 	logf   func(string, ...any)
 	notify func(title, body string)
 	onSnap func(instanceID string, snap core.Snapshot)
-	cancel context.CancelFunc
-	ctx    context.Context
 }
 
 // NewEnv makes an environment for one instance.
 func NewEnv(instanceID string, m Manifest, settings *Settings) *Env {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &Env{
 		InstanceID: instanceID,
 		manifest:   m,
 		settings:   settings,
-		ctx:        ctx,
-		cancel:     cancel,
 		logf:       func(string, ...any) {},
 		notify:     func(string, string) {},
 		onSnap:     func(string, core.Snapshot) {},
@@ -138,10 +132,6 @@ func (e *Env) Manifest() Manifest { return e.manifest }
 
 // Settings returns the instance's settings.
 func (e *Env) Settings() *Settings { return e.settings }
-
-// Context is cancelled when the instance stops, so a plugin may pass it to
-// HTTP requests and its own loops.
-func (e *Env) Context() context.Context { return e.ctx }
 
 // Logf writes a line to SeeAll's log.
 func (e *Env) Logf(format string, args ...any) { e.logf(format, args...) }
@@ -171,9 +161,6 @@ func (e *Env) Snapshot() core.Snapshot {
 	return e.snap
 }
 
-// Stop cancels the instance's context.
-func (e *Env) Stop() { e.cancel() }
-
 // SetLog sets where Logf writes.
 func (e *Env) SetLog(fn func(string, ...any)) {
 	if fn != nil {
@@ -192,15 +179,5 @@ func (e *Env) SetNotify(fn func(title, body string)) {
 func (e *Env) SetPublishHook(fn func(string, core.Snapshot)) {
 	if fn != nil {
 		e.onSnap = fn
-	}
-}
-
-// Closed reports whether the instance has stopped.
-func (e *Env) Closed() bool {
-	select {
-	case <-e.ctx.Done():
-		return true
-	default:
-		return false
 	}
 }

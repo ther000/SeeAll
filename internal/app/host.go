@@ -241,6 +241,9 @@ func (h *Host) Remove(id string) {
 			break
 		}
 	}
+	// Its cards are gone with it, so an order for them arranges nothing: a
+	// monitor removed and added back starts from the plugin's own order.
+	delete(h.saved.Order, id)
 	// Keep how it was set up, so that adding it back restores the monitor
 	// rather than a fresh one.
 	if len(in.Manifest().Settings) > 0 {
@@ -254,7 +257,6 @@ func (h *Host) Remove(id string) {
 	if in.monitor != nil {
 		in.monitor.Stop()
 	}
-	in.Env.Stop()
 	h.save()
 	h.OnChange()
 }
@@ -281,7 +283,6 @@ func (h *Host) Stop() {
 		if in.monitor != nil {
 			in.monitor.Stop()
 		}
-		in.Env.Stop()
 	}
 }
 

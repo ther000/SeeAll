@@ -38,8 +38,9 @@ type Instance interface {
 ```
 
 `Env` 是插件能用的全部：`Settings()` 读自己那几项、`Publish(core.Snapshot)` 上报、
-`Context()` 在 Stop 时被取消、`Notify()` 弹系统通知、`Logf()` 写日志。
-插件不碰 UI、不碰文件路径、不管生命周期。
+`Notify()` 弹系统通知、`Logf()` 写日志。
+插件不碰 UI、不碰文件路径、不管生命周期——取消也是：由 `Start()` 的 goroutine
+自己看退出信号，宿主只调 `Instance.Stop()`。
 
 `Manifest` 声明：ID、显示名、一句话说明、分组（设备/本机/服务）、图标、
 设置字段（`Setting{Key,Label,Type,Default,...}`）、能否多实例、默认实例名，
@@ -124,6 +125,9 @@ Height = round(840 / scale)
     （折线居右，`trendWidth`×`trendHeight` 的固定位置，没有折线也占位），下面依次是值与说明。
     **卡片可以拖着排序**：`GridView` 的 `GridState.Reorder` 给出新的顺序，`Host.SetCardOrder`
     按实例存进配置文件的 `order`。插件后来新增的读数接在排过的后面，不再报的自动跳过
+   ——**跳过是在画的时候做的，不是把 ID 从文件里删掉**。快照只说明「这一秒报了什么」，
+   一台没电池的机器不会报 battery，按快照裁剪会把用户排好的位置连同卡片一起丢掉。
+   只有实例被移除时才清掉它的顺序（`Host.Remove`）
     （`arrangeOrders`）——插件升级不该冲掉用户排好的部分。
     `GridView` 会在单元格四周各留 2 DIP，页面把这个宽度从 padding 里扣掉，卡片文字才和
     别的页落在那条统一的竖线上（`align_test.go` 抓的就是这 2 px）。
