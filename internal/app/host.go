@@ -136,8 +136,6 @@ func (h *Host) Load() error {
 	h.saved = state
 	h.mu.Unlock()
 
-	h.OnNotify = func(title, body string) { h.Notify(title, body) }
-
 	// A file that was written but holds no instance is a user who removed
 	// them all, and their choice stands across a restart. Only a machine that
 	// never ran SeeAll — no file, so no version — starts with every plugin's
@@ -313,8 +311,39 @@ func (h *Host) storeSnapshot(instanceID string, snap core.Snapshot) {
 	h.OnChange()
 }
 
-// Notify posts a system notification.
-func (h *Host) Notify(title, body string) { h.OnNotify(title, body) }
+// Notifications reports whether the app may post system notifications. It is
+// the switch the settings page shows, over the per-monitor ones: a monitor's
+// own "提醒" setting says when it would notify, this says whether anything may
+// appear at all.
+func (h *Host) Notifications() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if h.saved.UI.Notify == nil {
+		return true
+	}
+	return *h.saved.UI.Notify
+}
+
+// SetNotifications remembers whether notifications may be posted.
+func (h *Host) SetNotifications(on bool) {
+	h.mu.Lock()
+	if h.saved.UI.Notify != nil && *h.saved.UI.Notify == on {
+		h.mu.Unlock()
+		return
+	}
+	h.saved.UI.Notify = &on
+	h.mu.Unlock()
+	h.save()
+	h.OnChange()
+}
+
+// Notify posts a system notification, unless the user turned them off.
+func (h *Host) Notify(title, body string) {
+	if !h.Notifications() {
+		return
+	}
+	h.OnNotify(title, body)
+}
 
 func (h *Host) notifyInstance(title, body string) { h.Notify(title, body) }
 
@@ -348,6 +377,9 @@ type savedUI struct {
 	// Opacity is how solid the panel is, from MinPanelOpacity to 1; nil on a
 	// file written before the slider existed, which means opaque.
 	Opacity *float64 `json:"opacity,omitempty"`
+	// Notify is the master switch for system notifications; nil on a file
+	// written before it existed, which means on.
+	Notify *bool `json:"notify,omitempty"`
 }
 
 func (h *Host) readState() (fileState, error) {

@@ -42,7 +42,7 @@ func TestPagesShareOneGutter(t *testing.T) {
 		// card and the settings page's cards must land on them.
 		{"system", "CPU", "19.4 GB / 31.8 GB"},
 		{"mouse", "Rapoo Gaming Device", "无线"},
-		{SettingsPage, "应用", "全部刷新"},
+		{SettingsPage, "应用", "100%"},
 	}
 
 	// The first page sets the lines; the others must land on them.

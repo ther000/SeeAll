@@ -31,11 +31,11 @@ func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
 			})
 			hline(c, p)
 			controlRow(c, p, "通知", "电量低、状态异常时弹系统通知", func() {
-				if ui.Button(c, "").Label("全部刷新").Children(func() {
-					ui.Text(c, "全部刷新").FontSize(11).SingleLine()
-				}).Clicked() {
-					a.Host.Refresh()
-					c.Toast("已刷新全部监控项")
+				on := a.Host.Notifications()
+				// Named for what it does rather than for the row it sits in:
+				// assistive technology reads "允许通知", not a second "通知".
+				if ui.Switch(c, &on).Label("允许通知").Changed() {
+					a.Host.SetNotifications(on)
 				}
 			})
 			hline(c, p)
