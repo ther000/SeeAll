@@ -90,8 +90,13 @@ func TestTheSettingsPageStartsAtTheTop(t *testing.T) {
 	}
 
 	texts := strings.Join(tt.Texts(), " ")
-	if !strings.Contains(texts, "鼠标") {
+	if !strings.Contains(texts, "本机") {
 		t.Errorf("the settings page lists no monitor: %s", texts)
+	}
+	// The mouse has nothing to set — its receiver is found by itself — and a
+	// manual vendor number is exactly what that replaced.
+	if strings.Contains(texts, "厂商号") {
+		t.Errorf("the settings page still asks for a vendor number: %s", texts)
 	}
 }
 

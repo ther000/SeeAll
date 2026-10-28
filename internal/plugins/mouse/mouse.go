@@ -2,7 +2,6 @@ package mouse
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,13 +23,9 @@ func Manifest() plugin.Manifest {
 		// Battery, link and DPI are one mouse's readings: its page shows them
 		// in one card.
 		Combined: true,
-		Settings: []plugin.Setting{
-			{
-				Key: "vid", Label: "USB 厂商号", Type: plugin.SettingText, Default: "24AE",
-				Placeholder: "24AE",
-				Description: "雷柏是 24AE，换别的品牌就填它的 VID（十六进制）",
-			},
-		},
+		// No settings: a receiver is recognised by the collection it
+		// broadcasts on, so there is no vendor number a person would have to
+		// look up and type.
 	}
 }
 
@@ -51,7 +46,6 @@ type instance struct {
 
 	mu       sync.Mutex
 	readers  []*hid.Reader
-	paths    []string
 	device   string
 	frame    Frame
 	hasFrame bool
@@ -95,20 +89,6 @@ func (in *instance) Stop() {
 // frame, which keeps "2 秒前" honest even while the mouse is asleep.
 func (in *instance) Poll() { in.publish() }
 
-// vendorID reads the VID to watch from the settings.
-func (in *instance) vendorID() uint16 {
-	text := strings.TrimSpace(strings.ToLower(in.env.Settings().Get("vid")))
-	text = strings.TrimPrefix(text, "0x")
-	if text == "" {
-		return rapooVendorID
-	}
-	v, err := strconv.ParseUint(text, 16, 16)
-	if err != nil {
-		return rapooVendorID
-	}
-	return uint16(v)
-}
-
 func (in *instance) loop(quit <-chan struct{}) {
 	defer in.wg.Done()
 	in.ensureReaders()
@@ -124,13 +104,16 @@ func (in *instance) loop(quit <-chan struct{}) {
 	}
 }
 
-// ensureReaders finds the battery channels and starts one goroutine per
-// channel that is not being read yet.
+// ensureReaders finds the battery channels on every receiver plugged in and
+// starts one goroutine per channel that is not being read yet.
+//
+// The vendor a receiver comes from is not something the user knows or should
+// have to type: a channel is recognised by the usage page it broadcasts on, so
+// the mouse is picked up the moment its receiver is plugged in, whichever
+// brand it is. The frame parser is the arbiter — a collection that does not
+// send a state frame never becomes a reading.
 func (in *instance) ensureReaders() {
-	vendor := in.vendorID()
-	intfs, err := hid.Enumerate(func(i hid.Interface) bool {
-		return i.VendorID == vendor && i.UsagePage == batteryUsagePage && i.Usage == batteryUsage
-	})
+	intfs, err := hid.Enumerate(IsBatteryChannel)
 	if err != nil {
 		in.fail(fmt.Sprintf("枚举 HID 设备失败：%v", err))
 		return
@@ -143,30 +126,31 @@ func (in *instance) ensureReaders() {
 	}
 	in.mu.Unlock()
 
-	added := 0
+	// A channel that refuses to open is not worth a message of its own while
+	// another one is reading: on a desk with several candidates, the one that
+	// will not open is usually not the mouse.
+	var openErr error
 	for _, intf := range intfs {
 		if known[intf.Path] {
 			continue
 		}
 		reader, err := hid.OpenReader(intf)
 		if err != nil {
-			in.fail(fmt.Sprintf("打开 %s 失败：%v", intf.Describe(), err))
+			openErr = err
 			continue
 		}
+		// The receiver names the mouse it belongs to; the panel shows that
+		// name rather than one guessed from the vendor ID. It is only shown
+		// once this channel reports, so a candidate that never speaks cannot
+		// rename the mouse.
+		name := strings.TrimSpace(intf.Product)
 		in.mu.Lock()
 		in.readers = append(in.readers, reader)
-		in.paths = append(in.paths, intf.Describe())
-		// The receiver names the mouse it belongs to; the panel shows that
-		// name rather than one guessed from the vendor ID.
-		if name := strings.TrimSpace(intf.Product); name != "" {
-			in.device = name
-		}
 		problemCleared := in.problem
 		in.problem = ""
 		in.mu.Unlock()
-		added++
 		in.wg.Add(1)
-		go in.read(reader)
+		go in.read(reader, name)
 		if problemCleared != "" {
 			in.publish()
 		}
@@ -175,15 +159,20 @@ func (in *instance) ensureReaders() {
 	in.mu.Lock()
 	count := len(in.readers)
 	in.mu.Unlock()
-	if count == 0 && added == 0 {
-		in.mu.Lock()
-		in.hasFrame = false
-		in.mu.Unlock()
-		in.fail("没找到电量通道，确认接收器插好了")
+	if count > 0 {
+		return
 	}
+	in.mu.Lock()
+	in.hasFrame = false
+	in.mu.Unlock()
+	if openErr != nil {
+		in.fail(fmt.Sprintf("打不开鼠标的电量通道：%v", openErr))
+		return
+	}
+	in.fail("没找到鼠标的电量通道，确认接收器插好了")
 }
 
-func (in *instance) read(reader *hid.Reader) {
+func (in *instance) read(reader *hid.Reader, name string) {
 	defer in.wg.Done()
 	for {
 		in.mu.Lock()
@@ -216,6 +205,11 @@ func (in *instance) read(reader *hid.Reader) {
 		in.hasFrame = true
 		in.lastAt = time.Now()
 		in.problem = ""
+		// The mouse is named by the receiver that actually reported, not by
+		// whichever candidate happened to open first.
+		if name != "" {
+			in.device = name
+		}
 		in.mu.Unlock()
 		in.publish()
 	}
@@ -228,9 +222,6 @@ func (in *instance) dropReader(reader *hid.Reader) {
 	for i, r := range in.readers {
 		if r == reader {
 			in.readers = append(in.readers[:i], in.readers[i+1:]...)
-			if i < len(in.paths) {
-				in.paths = append(in.paths[:i], in.paths[i+1:]...)
-			}
 			return
 		}
 	}
@@ -257,7 +248,6 @@ func (in *instance) closeReaders() {
 	in.mu.Lock()
 	readers := in.readers
 	in.readers = nil
-	in.paths = nil
 	in.mu.Unlock()
 	for _, r := range readers {
 		r.Close()

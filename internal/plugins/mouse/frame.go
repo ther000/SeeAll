@@ -3,7 +3,10 @@
 // does through its 2.4G receiver.
 package mouse
 
-import "seeall/internal/core"
+import (
+	"seeall/internal/core"
+	"seeall/internal/hid"
+)
 
 // The Rapoo state frame, verified on a VT9 PRO (VID:PID 24AE:185A and
 // 24AE:418A):
@@ -16,8 +19,6 @@ import "seeall/internal/core"
 //	│  └─────────────── frame type: state broadcast
 //	└────────────────── report ID
 const (
-	// rapooVendorID is Rapoo's USB vendor ID.
-	rapooVendorID uint16 = 0x24AE
 	// batteryUsagePage is the vendor page the state broadcasts on.
 	batteryUsagePage uint16 = 0xFF00
 	// batteryUsage is the usage of the collecting that broadcasts.
@@ -27,6 +28,18 @@ const (
 	// batteryOffset is where the percentage sits.
 	batteryOffset = 6
 )
+
+// IsBatteryChannel reports whether a HID collection is one a wireless mouse
+// broadcasts its state on.
+//
+// The usage page and usage belong to the protocol, not to a brand, so the
+// vendor ID is deliberately not part of the test: a receiver nobody has typed
+// a number for is found the same way as the one this package was written
+// against. A collection that matches but speaks another dialect never parses
+// into a frame, which is what keeps this from picking up the wrong device.
+func IsBatteryChannel(i hid.Interface) bool {
+	return i.UsagePage == batteryUsagePage && i.Usage == batteryUsage
+}
 
 // Frame is one parsed state broadcast.
 type Frame struct {

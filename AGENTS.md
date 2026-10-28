@@ -62,7 +62,7 @@ Copy-Item build/windows-amd64/SeeAll.exe SeeAll.exe -Force
 ## 改配置文件和日志
 
 `seeall.json` 和 `logs/seeall.log` 就在 exe 旁边，也是应用**开着就在用**的东西。
-想改它们做验证（比如把 `vid` 换成别的值看失败路径），先停实例再等两秒：
+想改它们做验证（比如把 `gpu` 改成一张不存在的显卡看失败路径），先停实例再等两秒：
 
 ```powershell
 Get-Process SeeAll -ErrorAction SilentlyContinue | Stop-Process -Force

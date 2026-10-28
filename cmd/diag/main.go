@@ -37,7 +37,7 @@ func main() {
 		battery := 0
 		for _, i := range all {
 			mark := " "
-			if isBatteryChannel(i) {
+			if mouse.IsBatteryChannel(i) {
 				mark = "*"
 				battery++
 			}
@@ -53,14 +53,10 @@ func main() {
 	}
 }
 
-func isBatteryChannel(i hid.Interface) bool {
-	return i.VendorID == 0x24AE && i.UsagePage == 0xFF00 && i.Usage == 0x0002
-}
-
 func captureReports(path string, d time.Duration) {
 	var targets []hid.Interface
 	if path == "" {
-		all, err := hid.Enumerate(isBatteryChannel)
+		all, err := hid.Enumerate(mouse.IsBatteryChannel)
 		if err != nil {
 			log.Fatal(err)
 		}

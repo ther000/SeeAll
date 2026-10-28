@@ -21,7 +21,7 @@ func TestSettingsMoveFromTheOldFolder(t *testing.T) {
 	legacy := fileState{
 		Version: 1,
 		Instances: []savedEntry{
-			{PluginID: "mouse", Name: "鼠标", Settings: map[string]string{"vid": "1234"}},
+			{PluginID: "system", Name: "本机", Settings: map[string]string{"gpu": "1234"}},
 		},
 	}
 	legacy.UI.Opacity = &faint
@@ -49,8 +49,8 @@ func TestSettingsMoveFromTheOldFolder(t *testing.T) {
 	if got := h.PanelOpacity(); got != faint {
 		t.Errorf("panel opacity = %v, want the old file's %v", got, faint)
 	}
-	if got := h.Instance("mouse").Settings().Get("vid"); got != "1234" {
-		t.Errorf("the mouse's vendor id = %q, want the old file's 1234", got)
+	if got := h.Instance("system").Settings().Get("gpu"); got != "1234" {
+		t.Errorf("the GPU choice = %q, want the old file's 1234", got)
 	}
 	if _, err := os.Stat(old + ".migrated"); err != nil {
 		t.Errorf("the old file was not moved aside: %v", err)
@@ -70,7 +70,7 @@ func TestANewFileWinsOverTheOldOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	stale := fileState{Version: 1, Instances: []savedEntry{
-		{PluginID: "mouse", Name: "鼠标", Settings: map[string]string{"vid": "1234"}},
+		{PluginID: "system", Name: "本机", Settings: map[string]string{"gpu": "1234"}},
 	}}
 	data, _ := json.Marshal(stale)
 	if err := os.WriteFile(old, data, 0o644); err != nil {
@@ -81,7 +81,7 @@ func TestANewFileWinsOverTheOldOne(t *testing.T) {
 	// the app should read.
 	dir := t.TempDir()
 	current := fileState{Version: 1, Instances: []savedEntry{
-		{PluginID: "mouse", Name: "鼠标", Settings: map[string]string{"vid": "9999"}},
+		{PluginID: "system", Name: "本机", Settings: map[string]string{"gpu": "9999"}},
 	}}
 	data, err := json.Marshal(current)
 	if err != nil {
@@ -97,8 +97,8 @@ func TestANewFileWinsOverTheOldOne(t *testing.T) {
 	}
 	h.Stop()
 
-	if got := h.Instance("mouse").Settings().Get("vid"); got != "9999" {
-		t.Errorf("the mouse's vendor id = %q, want the new file's 9999", got)
+	if got := h.Instance("system").Settings().Get("gpu"); got != "9999" {
+		t.Errorf("the GPU choice = %q, want the new file's 9999", got)
 	}
 }
 

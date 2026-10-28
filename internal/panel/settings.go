@@ -32,7 +32,13 @@ func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
 			a.opacityRow(c, p)
 		})
 
+		// A monitor with nothing to set is not a card: this page offers what
+		// can be changed, and a plugin that finds its own device — the mouse
+		// finds its receiver — has no question to ask.
 		for _, in := range a.sorted(instances) {
+			if len(in.Manifest().Settings) == 0 {
+				continue
+			}
 			a.instanceCard(c, p, in)
 		}
 	})
