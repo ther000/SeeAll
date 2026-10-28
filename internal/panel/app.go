@@ -93,10 +93,21 @@ func (a *App) SetSelected(id string) {
 }
 
 // View builds the panel: a title bar, the tabs that choose what it shows, and
-// the page.
+// the page — or, in the dashboard's look, the health header, the cards and
+// the bar at the foot.
 func (a *App) View(c *ui.Context) {
-	p := paletteFor(c)
 	a.handleKeys(c)
+	if a.Host.Theme() == app.ThemeClassic {
+		a.classic(c)
+		return
+	}
+	a.dashboard(c)
+}
+
+// classic is the panel the app had before the dashboard: a title bar, a row
+// of tabs and a page of reading cards, in the desktop's own colors.
+func (a *App) classic(c *ui.Context) {
+	p := paletteFor(c)
 
 	instances := a.Host.Instances()
 	a.ensureSelection(instances)

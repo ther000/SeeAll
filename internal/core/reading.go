@@ -107,6 +107,11 @@ type Reading struct {
 	Text string
 	// Severity colors it.
 	Severity Severity
+	// Badge is a short tag a card shows beside its title: the clock the
+	// processor runs at, the disk's volume, "健康 78%". It says something
+	// about the value that the number cannot say by itself, and is empty
+	// when there is nothing worth saying.
+	Badge string
 	// Detail is a shorter explanation: "2 秒前", "192.168.1.7".
 	Detail string
 	// At is when the reading was taken; zero means the snapshot's time.
@@ -247,6 +252,19 @@ type Snapshot struct {
 	// Primary names the reading the page leads with, by ID. Empty means
 	// the most severe reading leads.
 	Primary string
+	// Health is how well the source is doing, from 0 to 100: the dashboard
+	// writes it as the one big number at the top of its page. Zero means the
+	// source does not score itself, and the dashboard shows the title there
+	// instead.
+	Health int
+	// HealthNote is what Health means in a word: "很好", "偏低".
+	HealthNote string
+	// Facts are the pills across the top of the dashboard, in the order it
+	// shows them: the processor's name, the memory total, the uptime.
+	Facts []Fact
+	// Processes are the programs worth naming, as the dashboard's list shows
+	// them: the ones using the most memory first.
+	Processes []Process
 	// Err is the last poll's failure, if it failed.
 	Err string
 }

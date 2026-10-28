@@ -82,6 +82,7 @@ type Reading struct {
 	Unit      Unit      // %、B、bit/s、ms、s，或任意 Unit("W")
 	Text      string    // 有它就显示文字，不显示数字
 	Severity  Severity  // none / ok / info / warn / critical / offline
+	Badge     string    // 卡片标题右边的短标签：「2.24 GHz」「C: · 159 GB」
 	Detail    string    // 副行：「2 秒前」「2.1 GB / 5.9 GB」
 	At        time.Time
 }
@@ -90,6 +91,30 @@ type Reading struct {
 `Snapshot.Primary` 指定「这页的大数字用哪项」——电量页要环、CPU 页要百分比。
 不指定就退化成「最严重的那项」。`Snapshot.Title` 是设备的真名，鼠标取自接收器的产品字符串
 （`HidD_GetProductString`），不是按 VID 猜的。
+
+仪表盘还要两种读数模型之外的**关于机器而不是测量值**的东西，它们同样由插件发布，
+面板不猜：
+
+```go
+type Fact struct{ Label, Value string }   // 头部胶囊；Text() 把两段拼成一句
+type Process struct{ Name string; Mem, CPU float64 } // Mem 字节，CPU 整机百分比
+
+Snapshot.Health      int    // 0–100，0 = 这个插件不打分
+Snapshot.HealthNote  string // 「很好」
+Snapshot.Facts       []Fact
+Snapshot.Processes   []Process
+```
+
+**读数 ID 是插件与面板的契约**：仪表盘把 `cpu/gpu/mem/disk/net/temp` 摆成六张卡，
+`vram` 并进 GPU 的说明行，`uptime` 只进头部的胶囊，`battery` 单独一张整宽卡；
+不认识的读数兜底成同一套卡片，追加在六张后面。`Badge` 只在这一层用得上，
+经典外观不画它。
+
+**Health 由插件算，不由面板算**：什么算「健康」是那个插件的事（鼠标拿电量当分数，
+本机按 CPU/内存/GPU/温度/磁盘/电池各自的免罚区间扣分），读不到的维度不扣分。
+`0` 是保留值：面板画设备名而不是一个假分数。
+
+**Processes 按程序名在插件里合并**：浏览器是十几个进程，五行 chrome 不如一行「chrome」。
 
 ## 面板
 
@@ -115,7 +140,29 @@ Height = round(840 / scale)
 老版本用 `SizeToContent` 让窗口贴着内容长，结果设置页一开就长出屏幕外。
 现在页面容器是 `Grow(1) + Shrink(1) + Basis(0)`，标题栏永远在顶部。
 
-三层结构：
+### 两套外观
+
+外观存在配置文件的 `ui.theme`（`Host.Theme` / `Host.SetTheme`，默认 `dashboard`）：
+
+- `dashboard`（深蓝仪表盘）：`internal/panel/dashboard.go`，默认外观。
+- `classic`：下面那三层。
+
+两套共用同一份读数、同一批页面函数（设置页、设备页复用），只换调色板和版式：
+`App.View` 先问主题，`classic()` 是原来那条路径一个字没动，`dashboard()` 另起一块画布。
+仪表盘每帧把 `ui.Theme` 改成深色（`dashFor`），控件、滚动条、开关都跟着深——它是设计成深色的
+面板，不跟随系统外观。
+
+仪表盘自上而下：画布（左暖紫到右蓝的渐变 + 页脚一层暖光，`Painter.FillGradient` 直接画）
+→ 头（健康分、评语、`Facts` 胶囊）→ 滚动内容（六张卡两列、电池整宽、进程列表）→ 底栏（不滚动）。
+每块高度写死（`dashCardH`、`dashBatteryH`、`dashProcRowH`），因为「660×840 里刚好放下」是设计的一部分：
+卡片一长就会吃掉底栏，窄窗口就退化成页内滚动。
+
+头在 `Health == 0` 时改画设备名——一个不打分的数据源不该顶着一个假分数。进程卡没有数据就整块不出现。
+
+底栏的三列统计是**整个窗口**的，不是当前页的：切到鼠标页也照样显示机器的可用空间与异常项，
+所以 `dashFreeSpace` / `dashProblems` 遍历所有实例，没有磁盘读数的页面不会退化成「—」。
+
+经典外观的三层：
 
 - **标题栏**（`header`）：图标 + 应用名 + 刷新 + 设置。
 - **标签页**（`tabs`）：`ui.TabsBase` 自绘，每项 `Grow(1)` 等宽；选中项白底描边，
@@ -150,7 +197,7 @@ Height = round(840 / scale)
 配置文件里 `version` 为 0（即文件不存在）才按默认插件播种实例。文件写了但没有实例，
 表示用户把监控项全删了，重启不该替他把它们加回来。
 
-`Settings.Load` 只收 manifest 还声明着的键：插件不再提供的设置（比如移除掉的 `disk`）
+`Settings.Load` 只收 manifest 还声明着的键：插件不再提供的设置（比如本机那行已经删掉的「盘符」）
 读进来就丢掉，配置文件里不会留一个没人认识的值，下次保存也就没了。
 
 ### 通知分两层
@@ -248,7 +295,16 @@ Windows 上 `SetOpacity` 走 `WS_EX_LAYERED` + `SetLayeredWindowAttributes`：�
   也可能列一张已禁用的卡，选进去就是一行永远 0% 的读数。
 - GPU 占用是所选卡各引擎利用率的**求和**（与任务管理器一致），不是平均值；软件渲染适配器
   （`DXGI_ADAPTER_FLAG_SOFTWARE`）不列出来。
-- 磁盘读数已经移除：一个盘符的剩余空间在这块面板上不是会变的东西。
+- 磁盘只读**系统盘**（`%SystemDrive%`）：`GetDiskFreeSpaceExW` 取余量、`GetVolumeInformationW`
+  取卷标与总量。仪表盘那张卡和底栏「可用空间」说的是同一个盘，不做所有卷求和。
+- 温度走 PDH 的 `\Thermal Zone Information(*)\Temperature`（开尔文），取最热的 zone，
+  只接受 0–125°C。那是主板/机箱级读数，所以文案写「系统 59°」，不冒充 CPU 封装温度。
+  GPU 温度没有任何通用 API，拿不到就不画那个徽标，也不编一个数字。
+- 进程榜：Toolhelp32 枚举 + `GetProcessMemoryInfo`（工作集）+ `GetProcessTimes`（两次采样
+  之间 CPU 时间的增量 ÷ 墙钟 ÷ 核数），按程序名合并后取内存前 5；打不开的受保护进程跳过，
+  间隔不到 100ms 的两次采样不算 CPU%（否则连点刷新会得到天文数字）。
+- 电池健康度：`CM_Get_Device_Interface_List` 找到电池设备，`IOCTL_BATTERY_QUERY_INFORMATION`
+  读 `DesignedCapacity` 与 `FullChargedCapacity`；拿不到就不写「健康 78%」那个徽标。
 - 自带只有鼠标和本机两个插件：插件化是给后续监控对象留的口子，不是一次塞满托盘。
 
 ## 验证过的事

@@ -5,7 +5,6 @@ package system
 
 import (
 	"fmt"
-	"runtime"
 	"time"
 
 	"seeall/internal/core"
@@ -94,117 +93,57 @@ func (in *instance) collect() {
 	now := time.Now()
 	m := in.sampler.sample(in.env.Settings().Get("gpu"))
 
-	status := core.StatusOK
-	readings := []core.Reading{
-		{ID: "cpu", Label: "CPU", Value: m.CPUPercent, Unit: core.UnitPercent,
-			Severity: loadSeverity(m.CPUPercent), Detail: fmt.Sprintf("%d 核", runtime.NumCPU())},
-		{ID: "mem", Label: "内存", Value: m.MemUsedPercent, Unit: core.UnitPercent,
-			Severity: loadSeverity(m.MemUsedPercent),
-			Detail:   core.FormatBytes(m.MemUsed) + " / " + core.FormatBytes(m.MemTotal)},
-	}
-	if m.HasBattery {
-		severity := core.SeverityOK
-		switch {
-		case m.BatteryPercent <= 10:
-			severity = core.SeverityCritical
-		case m.BatteryPercent <= 30:
-			severity = core.SeverityWarn
-		}
-		detail := ""
-		if m.Charging {
-			detail = "充电中"
-		} else if m.BatteryMinutes >= 0 {
-			detail = core.FormatDuration(time.Duration(m.BatteryMinutes)*time.Minute) + "续航"
-		}
-		readings = append(readings, core.Reading{
-			ID: "battery", Label: "电池", Value: m.BatteryPercent, Unit: core.UnitPercent,
-			Severity: severity, Detail: detail,
-		})
-		if m.BatteryPercent <= 10 && !m.Charging {
-			in.notifyBattery(m.BatteryPercent)
-		} else if m.BatteryPercent > 20 || m.Charging {
-			in.notified = false
-		}
-	}
-	// The network's rates are a flow, not a level: they are written as words
-	// because "12.3 KB/s" is read at a glance and a number with a unit is not.
-	readings = append(readings,
-		core.Reading{
-			ID: "net-down", Label: "下载", Text: core.FormatBytes(m.NetRxRate) + "/s",
-			Severity: core.SeverityNone, Detail: "全部网卡",
-		},
-		core.Reading{
-			ID: "net-up", Label: "上传", Text: core.FormatBytes(m.NetTxRate) + "/s",
-			Severity: core.SeverityNone,
-		},
-	)
 	// Whatever was said about the graphics being gone is over once the sample
 	// stops reporting a problem — whether the card came back or the settings
 	// stopped pointing at one. Otherwise the next time it goes missing there
 	// would be nothing to say, because it would still equal the last line.
 	if m.GPUProblem == "" {
 		in.problem = ""
-	}
-	switch {
-	case m.HasGPU:
-		readings = append(readings, core.Reading{
-			ID: "gpu", Label: "GPU", Value: m.GPUPercent, Unit: core.UnitPercent,
-			Severity: loadSeverity(m.GPUPercent), Detail: m.GPUName,
-		})
-		if m.VRAMTotal > 0 && m.VRAMUsed > 0 {
-			readings = append(readings, core.Reading{
-				ID: "vram", Label: "显存", Value: 100 * m.VRAMUsed / m.VRAMTotal,
-				Unit:     core.UnitPercent,
-				Severity: loadSeverity(100 * m.VRAMUsed / m.VRAMTotal),
-				Detail:   core.FormatBytes(m.VRAMUsed) + " / " + core.FormatBytes(m.VRAMTotal),
-			})
-		}
-	case m.GPUProblem != "":
-		// The user chose a card that is not there any more. The page says so
-		// in the place the reading would have taken.
-		readings = append(readings, core.Reading{
-			ID: "gpu", Label: "GPU", Text: "不可用", Severity: core.SeverityOffline,
-			Detail: m.GPUProblem,
-		})
-		status = core.StatusWarn
+	} else if in.problem != m.GPUProblem {
+		in.problem = m.GPUProblem
 		// Said in the log too: the page explains it, but a user asking "why is
 		// my GPU missing" looks at the log, and a line that recurs every few
 		// seconds is noisier than the problem.
-		if in.problem != m.GPUProblem {
-			in.problem = m.GPUProblem
-			in.env.Logf("system: %s", m.GPUProblem)
-		}
+		in.env.Logf("system: %s", m.GPUProblem)
 	}
 
-	readings = append(readings, core.Reading{
-		ID: "uptime", Label: "开机", Text: core.FormatMillis(float64(m.Uptime / time.Millisecond)),
-		Severity: core.SeverityNone,
-	})
-
-	if m.CPUPercent >= 90 || m.MemUsedPercent >= 92 || (m.HasGPU && m.GPUPercent >= 95) {
+	status := core.StatusOK
+	diskPercent := 0.0
+	if m.HasDisk && m.DiskTotal > 0 {
+		diskPercent = 100 * (m.DiskTotal - m.DiskFree) / m.DiskTotal
+	}
+	switch {
+	case m.CPUPercent >= 90, m.MemUsedPercent >= 92,
+		m.HasGPU && m.GPUPercent >= 95,
+		m.HasTemp && m.TempC >= 90,
+		m.HasDisk && diskPercent >= 95,
+		m.GPUProblem != "":
 		status = core.StatusWarn
 	}
 
-	in.env.Publish(core.Snapshot{
-		At:       now,
-		Status:   status,
-		Title:    m.Hostname,
-		Subtitle: m.Platform,
-		Primary:  "cpu",
-		Readings: readings,
-	})
-}
-
-// loadSeverity colors a percentage where high is bad.
-func loadSeverity(p float64) core.Severity {
-	switch {
-	case p >= 92:
-		return core.SeverityCritical
-	case p >= 75:
-		return core.SeverityWarn
-	default:
-		return core.SeverityOK
+	if m.HasBattery {
+		if m.BatteryPercent <= 10 && !m.Charging {
+			in.notifyBattery(m.BatteryPercent)
+		} else if m.BatteryPercent > 20 || m.Charging {
+			in.notified = false
+		}
 	}
+
+	// The dashboard leads with one number and a word for it; the page's cards
+	// say the same thing in more detail underneath.
+	health, note := healthOf(m)
+	in.env.Publish(core.Snapshot{
+		At:         now,
+		Status:     status,
+		Title:      m.Hostname,
+		Subtitle:   m.Platform,
+		Primary:    "cpu",
+		Readings:   readings(m),
+		Health:     health,
+		HealthNote: note,
+		Facts:      facts(m),
+		Processes:  topProcesses(m.Processes, processCount),
+	})
 }
 
 func (in *instance) notifyBattery(level float64) {

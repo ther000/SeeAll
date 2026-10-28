@@ -11,6 +11,10 @@ import (
 )
 
 // fixture makes a host with its built-in instances, without polling.
+//
+// It pins the classic look: the tests below are about the layout the panel
+// had before the dashboard, and must go on measuring that layout rather than
+// whichever look the app opens with.
 func fixture(t *testing.T) (*app.Host, *App) {
 	t.Helper()
 	h := app.NewHost(t.TempDir())
@@ -19,6 +23,7 @@ func fixture(t *testing.T) (*app.Host, *App) {
 	}
 	h.Stop()
 	h.OnChange = func() {}
+	h.SetTheme(app.ThemeClassic)
 	h.Inject("mouse", core.Snapshot{Status: core.StatusOK, Title: "Rapoo Gaming Device",
 		Subtitle: "无线 · 72%", Primary: "battery", Readings: []core.Reading{
 			{ID: "battery", Label: "电量", Value: 72, Unit: core.UnitPercent, Severity: core.SeverityOK},

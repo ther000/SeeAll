@@ -326,6 +326,19 @@ func (in *instance) publish() {
 			ID: "charging", Label: "供电", Text: "有线", Severity: core.SeverityInfo,
 		})
 	}
+
+	// The dashboard leads with the charge and what it means; a mouse that has
+	// not reported for a while has no score at all, and the page then shows
+	// the device's name instead of a number from a minute ago.
+	if !stale {
+		snap.Health, snap.HealthNote = mouseHealth(frame.Battery)
+	}
+	// The pills across the dashboard's header: what the mouse is, rather than
+	// how much charge it has left.
+	snap.Facts = []core.Fact{
+		{Label: "连接", Value: link},
+		{Label: "DPI", Value: core.FormatNumber(float64(frame.DPI))},
+	}
 	in.env.Publish(snap)
 	in.maybeNotify(frame.Battery, stale)
 }

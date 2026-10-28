@@ -20,6 +20,7 @@ var (
 	procPdhOpenQuery                = pdh.NewProc("PdhOpenQueryW")
 	procPdhCloseQuery               = pdh.NewProc("PdhCloseQuery")
 	procPdhAddCounter               = pdh.NewProc("PdhAddCounterW")
+	procPdhAddEnglishCounter        = pdh.NewProc("PdhAddEnglishCounterW")
 	procPdhCollectQueryData         = pdh.NewProc("PdhCollectQueryData")
 	procPdhGetFormattedCounterValue = pdh.NewProc("PdhGetFormattedCounterValue")
 	procPdhGetFormattedCounterArray = pdh.NewProc("PdhGetFormattedCounterArrayW")
@@ -56,12 +57,29 @@ type pdhInstance struct {
 // the machine does not have leaves the query open with the others: a machine
 // without a GPU still reports its network.
 func (q *pdhQuery) add(path string, array bool) bool {
+	return q.addWith(procPdhAddCounter, path, array)
+}
+
+// addEnglish collects a path whose counter is named in English, and falls back
+// to the localized name. A Chinese Windows does not answer to "Bytes
+// Received/sec" when the counter is added by that name, only when it is added
+// as an English counter; a machine whose PDH predates that API is the other
+// way round.
+func (q *pdhQuery) addEnglish(path string, array bool) bool {
+	if procPdhAddEnglishCounter.Find() == nil && q.addWith(procPdhAddEnglishCounter, path, array) {
+		return true
+	}
+	return q.addWith(procPdhAddCounter, path, array)
+}
+
+// addWith is add through one of the two entry points.
+func (q *pdhQuery) addWith(proc *syscall.LazyProc, path string, array bool) bool {
 	var c uintptr
 	p, err := syscall.UTF16PtrFromString(path)
 	if err != nil {
 		return false
 	}
-	if status, _, _ := procPdhAddCounter.Call(q.handle, uintptr(unsafe.Pointer(p)), 0, uintptr(unsafe.Pointer(&c))); status != 0 {
+	if status, _, _ := proc.Call(q.handle, uintptr(unsafe.Pointer(p)), 0, uintptr(unsafe.Pointer(&c))); status != 0 {
 		return false
 	}
 	q.counters = append(q.counters, &pdhCounter{handle: c, path: path, array: array})

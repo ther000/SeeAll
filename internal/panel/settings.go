@@ -40,6 +40,8 @@ func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
 			})
 			hline(c, p)
 			a.opacityRow(c, p)
+			hline(c, p)
+			a.themeRow(c, p)
 		})
 
 		for _, in := range a.sorted(instances) {
@@ -47,6 +49,32 @@ func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
 		}
 
 		a.addCard(c, p)
+	})
+}
+
+// themeRow is which look the panel is drawn in. The two looks are the two
+// arrangements the panel has had, and the choice is the user's rather than
+// the desktop's: the dashboard is a dark panel by design, so it must not
+// depend on the system's appearance.
+//
+// A change takes effect on the next frame — the panel reads the choice from
+// the host as it builds each one — and the host writes it to the settings
+// file, so the next launch opens in the look the user left.
+func (a *App) themeRow(c *ui.Context, p palette) {
+	labels := []string{"深蓝仪表盘", "经典"}
+	values := []string{app.ThemeDashboard, app.ThemeClassic}
+	shown := labels[0]
+	if a.Host.Theme() == app.ThemeClassic {
+		shown = labels[1]
+	}
+	controlRow(c, p, "主题", "仪表盘按健康分排布，经典保留标签页", func() {
+		if ui.Select(c, &shown, labels).Label("主题").Changed() {
+			chosen := values[0]
+			if shown == labels[1] {
+				chosen = values[1]
+			}
+			a.Host.SetTheme(chosen)
+		}
 	})
 }
 

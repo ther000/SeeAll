@@ -63,3 +63,29 @@ func TestAGpuProblemIsLogged(t *testing.T) {
 		t.Error("the card went missing a second time and nothing was logged")
 	}
 }
+
+// TestSayOnceLogsWhenTheProblemChanges checks the sampler's own reporting: a
+// counter that is missing on every sample must cost one line, and a counter
+// that comes back and goes again must cost a second one. A log that repeats
+// itself every two seconds hides the line that mattered.
+func TestSayOnceLogsWhenTheProblemChanges(t *testing.T) {
+	in, lines := captureLog(t, "system")
+	sampler := &in.sampler
+
+	sampler.sayOnce("temp", "system: 读不到温度")
+	sampler.sayOnce("temp", "system: 读不到温度")
+	if len(*lines) != 1 {
+		t.Fatalf("the same problem was written %d times: %v", len(*lines), *lines)
+	}
+	// A different problem is a different line, even while the first one lasts.
+	sampler.sayOnce("disk", "system: 读不到 C: 的剩余空间")
+	if len(*lines) != 2 {
+		t.Fatalf("a second problem was written as %v", *lines)
+	}
+	// The temperature counter answers again, then stops again: that is news.
+	sampler.sayClear("temp")
+	sampler.sayOnce("temp", "system: 读不到温度")
+	if len(*lines) != 3 {
+		t.Errorf("a problem that came back was not written: %v", *lines)
+	}
+}

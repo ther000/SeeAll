@@ -93,3 +93,23 @@ func batterySeverity(level int) core.Severity {
 		return core.SeverityOK
 	}
 }
+
+// mouseHealth is the number the dashboard leads with: the charge itself, and
+// the one word that says what it means for a mouse you have to pick up. Zero is
+// reserved in core for "this source does not score itself", which a mouse with
+// no frame already is, so a reported empty battery scores 1 rather than 0.
+func mouseHealth(level int) (int, string) {
+	switch {
+	case level < 1:
+		level = 1
+	case level > 100:
+		level = 100
+	}
+	switch {
+	case level >= 60:
+		return level, "电量充足"
+	case level >= 30:
+		return level, "电量偏低"
+	}
+	return level, "需要充电"
+}

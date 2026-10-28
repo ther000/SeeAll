@@ -1,7 +1,9 @@
 package system
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"seeall/internal/core"
 	"seeall/internal/plugin"
@@ -29,15 +31,17 @@ func TestCollectPublishesTheCounters(t *testing.T) {
 	for _, r := range snap.Readings {
 		byID[r.ID] = r
 	}
-	for _, want := range []string{"cpu", "mem", "net-down", "net-up", "uptime"} {
+	for _, want := range []string{"cpu", "mem", "net", "uptime"} {
 		if _, ok := byID[want]; !ok {
 			t.Errorf("the page has no %q reading: %v", want, snap.Readings)
 		}
 	}
-	// The drives are not watched: a partition's free space was one more
-	// number that never moved, and the page is for what does.
-	if _, ok := byID["disk"]; ok {
-		t.Errorf("the page still counts a drive: %v", snap.Readings)
+	// The two directions share one card: a download card and an upload card
+	// side by side would take the room a chart needs.
+	for _, gone := range []string{"net-down", "net-up"} {
+		if _, ok := byID[gone]; ok {
+			t.Errorf("the page still has the separate %q reading: %v", gone, snap.Readings)
+		}
 	}
 
 	// The machine running the test either has a GPU or does not; what must
@@ -60,32 +64,63 @@ func TestCollectPublishesTheCounters(t *testing.T) {
 			t.Error("the VRAM reading says nothing about how much it is of what")
 		}
 	}
+
+	// The dashboard's header reads these two: a score in the range the panel
+	// draws as a number, and a word for it.
+	if snap.Health < 1 || snap.Health > 100 {
+		t.Errorf("the machine scores %d, outside 1..100", snap.Health)
+	}
+	if snap.HealthNote == "" {
+		t.Error("the score has no word to go with it")
+	}
 }
 
-// TestNetworkReadingsAreRates checks the network readings read as rates: a
-// byte count with "per second" on it, which is what the reading's words carry.
+// TestFactsArePublished checks the header's pills come out of the sample rather
+// than out of the panel: the pane cannot know what processor this is.
+func TestFactsArePublished(t *testing.T) {
+	in := newTestInstance(t)
+	in.collect()
+	snap := in.env.Snapshot()
+
+	if len(snap.Facts) == 0 {
+		t.Fatalf("the header has no pills at all: %v", snap.Readings)
+	}
+	for _, f := range snap.Facts {
+		if f.Value == "" {
+			t.Errorf("the header holds an empty pill: %+v", snap.Facts)
+		}
+	}
+	// The uptime pill is the last one and is written with the label: the page
+	// reads "已运行 2天2小时".
+	last := snap.Facts[len(snap.Facts)-1]
+	if last.Label == "" {
+		t.Errorf("the last pill is unlabelled: %+v", snap.Facts)
+	}
+}
+
+// TestNetworkReadingsAreRates checks the network card reads as a rate: a byte
+// count with "per second" on it, which is what the reading's words carry, and
+// the upload rate underneath.
 func TestNetworkReadingsAreRates(t *testing.T) {
 	in := newTestInstance(t)
 	in.collect()
 	snap := in.env.Snapshot()
 
-	for _, id := range []string{"net-down", "net-up"} {
-		var found bool
-		for _, r := range snap.Readings {
-			if r.ID != id {
-				continue
-			}
-			found = true
-			if r.Text == "" {
-				t.Errorf("%s shows a number, want words with a unit", id)
-			}
-			if len(r.Text) < 3 || r.Text[len(r.Text)-2:] != "/s" {
-				t.Errorf("%s reads %q, want something per second", id, r.Text)
-			}
-		}
-		if !found {
-			t.Errorf("no %s reading", id)
-		}
+	net, ok := snap.Reading("net")
+	if !ok {
+		t.Fatalf("the page has no network reading: %v", snap.Readings)
+	}
+	if net.Text == "" {
+		t.Error("the network card shows a number, want words with a unit")
+	}
+	if len(net.Text) < 3 || net.Text[len(net.Text)-2:] != "/s" {
+		t.Errorf("the network reads %q, want something per second", net.Text)
+	}
+	if net.Badge == "" {
+		t.Error("the network card does not say which link carried the traffic")
+	}
+	if !strings.HasPrefix(net.Detail, "上传 ") {
+		t.Errorf("the upload line reads %q", net.Detail)
 	}
 }
 
@@ -112,4 +147,28 @@ func TestAChosenCardThatIsGoneIsSaidSo(t *testing.T) {
 	if snap.Status != core.StatusWarn {
 		t.Errorf("the page is %v, want a warning", snap.Status)
 	}
+}
+
+// TestUptimeIsWrittenAsASpan checks the uptime card and the header's pill use
+// the dashboard's wording rather than the milliseconds the sampler measures: a
+// machine up for two days reads "2天2小时", not "49.0 h".
+func TestUptimeIsWrittenAsASpan(t *testing.T) {
+	m := metrics{Hostname: "TUF", Uptime: 49*time.Hour + 59*time.Minute}
+	snap := snapshotOf(m)
+	up, ok := snap.Reading("uptime")
+	if !ok {
+		t.Fatalf("no uptime reading: %v", snap.Readings)
+	}
+	if up.Text != "2天1小时" {
+		t.Errorf("uptime reads %q, want 2天1小时", up.Text)
+	}
+	last := snap.Facts[len(snap.Facts)-1]
+	if last.Value != "2天1小时" {
+		t.Errorf("the header's uptime is %q", last.Value)
+	}
+}
+
+// snapshotOf wraps a sample the way collect does, without a machine.
+func snapshotOf(m metrics) core.Snapshot {
+	return core.Snapshot{Readings: readings(m), Facts: facts(m)}
 }

@@ -385,6 +385,9 @@ type savedUI struct {
 	// Notify is the master switch for system notifications; nil on a file
 	// written before it existed, which means on.
 	Notify *bool `json:"notify,omitempty"`
+	// Theme is the look the panel draws: ThemeDashboard or ThemeClassic. Nil
+	// on a file written before there was a choice, which means the dashboard.
+	Theme *string `json:"theme,omitempty"`
 }
 
 func (h *Host) readState() (fileState, error) {

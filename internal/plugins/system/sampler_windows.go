@@ -14,7 +14,8 @@ import (
 // Windows sampling through kernel32 and pdh, with no cgo: GetSystemTimes for
 // the processor, GlobalMemoryStatusEx for memory, GetSystemPowerStatus for the
 // battery, GetTickCount64 for the uptime, and the performance counters for the
-// network's rates and the graphics processor's load and memory.
+// network's rates, the graphics processor's load and memory, the clock the
+// processor is running at and the thermal zones' temperatures.
 
 var kernel32 = syscall.NewLazyDLL("kernel32.dll")
 
@@ -56,14 +57,26 @@ type sampler struct {
 	cpu       float64
 	havePrev  bool
 
-	// perf holds the counters kernel32 does not have: the network's rates and
-	// the graphics processor's load and memory. Its counters are collected
-	// once on init so that the first sample has a rate to report.
-	perf    *pdhQuery
-	netRx   *pdhCounter
-	netTx   *pdhCounter
-	gpuUtil *pdhCounter
-	vram    *pdhCounter
+	// inv is what the machine is: read once, since a processor's name and the
+	// Windows release do not change while the program runs.
+	inv inventory
+
+	// perf holds the counters kernel32 does not have: the network's rates, the
+	// graphics processor's load and memory, the processor's clock and the
+	// thermal zones. Its counters are collected once on init so that the first
+	// sample has a rate to report.
+	perf     *pdhQuery
+	netRx    *pdhCounter
+	netTx    *pdhCounter
+	gpuUtil  *pdhCounter
+	vram     *pdhCounter
+	cpuClock *pdhCounter
+	thermal  *pdhCounter
+
+	// procs lists the programs running and remembers what they had used at
+	// the previous sample, which is what turns their processor time into a
+	// share.
+	procs processSampler
 
 	// gpuKey is the card the settings ask for and gpu the card that turned out
 	// to be it. The counters are read per adapter, so every sample has to know
@@ -78,9 +91,21 @@ type sampler struct {
 	// have is a reading missing from a page that otherwise looks fine, and
 	// nothing else would ever mention it.
 	logf func(format string, args ...any)
+	// said keeps the problems already written, so that one that lasts is
+	// written once.
+	said map[string]bool
+	// inited is whether init has run, so that a poll before Start reads what
+	// the registry says rather than an empty machine.
+	inited bool
 }
 
 func (s *sampler) init() {
+	if s.inited {
+		return
+	}
+	s.inited = true
+	s.inv = readInventory()
+	s.procs.cores = float64(runtime.NumCPU())
 	s.sampleCPU()
 	s.initPerf()
 }
@@ -95,25 +120,35 @@ func (s *sampler) initPerf() {
 	}
 	// Every interface is summed, so the rates cover the machine rather than
 	// one adapter the user may not be using.
-	if q.add(`\Network Interface(*)\Bytes Received/sec`, true) {
+	if q.addEnglish(`\Network Interface(*)\Bytes Received/sec`, true) {
 		s.netRx = q.counters[len(q.counters)-1]
 	} else {
 		s.log("system: 没有网络计数器，下载速率不会有")
 	}
-	if q.add(`\Network Interface(*)\Bytes Sent/sec`, true) {
+	if q.addEnglish(`\Network Interface(*)\Bytes Sent/sec`, true) {
 		s.netTx = q.counters[len(q.counters)-1]
 	} else {
 		s.log("system: 没有网络计数器，上传速率不会有")
 	}
-	if q.add(gpuEnginePath, true) {
+	if q.addEnglish(gpuEnginePath, true) {
 		s.gpuUtil = q.counters[len(q.counters)-1]
 	} else {
 		s.log("system: 没有 GPU 引擎计数器，占用不会有")
 	}
-	if q.add(gpuMemoryPath, true) {
+	if q.addEnglish(gpuMemoryPath, true) {
 		s.vram = q.counters[len(q.counters)-1]
 	} else {
 		s.log("system: 没有显存计数器，显存不会有")
+	}
+	if q.addEnglish(cpuClockPath, false) {
+		s.cpuClock = q.counters[len(q.counters)-1]
+	} else {
+		s.log("system: 没有 CPU 频率计数器，频率标签不会有")
+	}
+	if q.addEnglish(thermalPath, true) {
+		s.thermal = q.counters[len(q.counters)-1]
+	} else {
+		s.log("system: 没有温度计数器，温度读数不会出现")
 	}
 	if len(q.counters) == 0 {
 		q.close()
@@ -135,9 +170,9 @@ func (s *sampler) sampleCPU() {
 	); ok == 0 {
 		return
 	}
-	idleT := uint64(idle.HighDateTime)<<32 | uint64(idle.LowDateTime)
-	kernelT := uint64(kernel.HighDateTime)<<32 | uint64(kernel.LowDateTime)
-	userT := uint64(user.HighDateTime)<<32 | uint64(user.LowDateTime)
+	idleT := filetimeTicks(idle)
+	kernelT := filetimeTicks(kernel)
+	userT := filetimeTicks(user)
 	// Kernel time includes idle time.
 	total := kernelT + userT
 	if !s.havePrev {
@@ -161,11 +196,17 @@ func (s *sampler) sampleCPU() {
 // sample reads the machine. gpuKey names the card the page is about: a key
 // from the settings page, or gpuAuto.
 func (s *sampler) sample(gpuKey string) metrics {
+	// A poll that arrives before Start still gets a whole page: what the
+	// machine is, and the counters, are read on the first sample either way.
+	s.init()
 	s.sampleCPU()
 	m := metrics{
 		Hostname:       hostname(),
 		Platform:       fmt.Sprintf("Windows · %s/%s", runtime.GOOS, runtime.GOARCH),
 		CPUPercent:     s.cpu,
+		CPUName:        s.inv.CPUName,
+		Threads:        runtime.NumCPU(),
+		OSName:         s.inv.OSName,
 		BatteryMinutes: -1,
 	}
 
@@ -187,12 +228,29 @@ func (s *sampler) sample(gpuKey string) metrics {
 			if power.BatteryLifeTime != 0xFFFFFFFF {
 				m.BatteryMinutes = int(power.BatteryLifeTime / 60)
 			}
+			// The wear is a property of the battery, read once when the
+			// program started, not a sample.
+			m.HasBatteryHealth, m.BatteryHealth = s.inv.HasBatteryHealth, s.inv.BatteryHealth
 		}
 	}
 
 	if ticks, _, _ := procGetTickCount64.Call(); ticks != 0 {
 		m.Uptime = time.Duration(ticks) * time.Millisecond
 	}
+
+	// Free space moves, so it is read every sample. A volume that cannot be
+	// read leaves the card out rather than showing zero bytes free.
+	if free, total, label, ok := volumeSpace(s.inv.DrivePath); ok {
+		m.HasDisk, m.DiskFree, m.DiskTotal = true, free, total
+		m.DiskDrive, m.DiskLabel = s.inv.Drive, label
+		s.sayClear("disk")
+	} else {
+		s.sayOnce("disk", "system: 读不到 %s 的剩余空间，可用空间读数不会出现", s.inv.Drive)
+	}
+
+	// The link is read every sample: a laptop moves between Wi-Fi and a cable,
+	// and the badge should follow it.
+	m.NetKind = netKind()
 
 	// The card is resolved whether or not the counters opened: a choice the
 	// machine cannot honour is worth saying even when nothing can be counted.
@@ -201,9 +259,16 @@ func (s *sampler) sample(gpuKey string) metrics {
 		net := s.sampleNet()
 		m.NetRxRate, m.NetTxRate = net[0], net[1]
 		s.sampleGPU(&m, card, found, gpuKey)
+		s.sampleClock(&m)
+		s.sampleTemp(&m)
 	} else if !found && gpuKey != "" && gpuKey != gpuAuto {
 		m.GPUProblem = missingCard
 	}
+
+	// The program list is the dashboard's bottom card: it is cheap enough to
+	// take with every sample, and a list that lags behind the charts above it
+	// would be the one part of the page that does.
+	m.Processes = s.procs.sample(time.Now())
 	return m
 }
 
