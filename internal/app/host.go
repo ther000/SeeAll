@@ -302,7 +302,11 @@ func (h *Host) storeSnapshot(instanceID string, snap core.Snapshot) {
 		in.history = map[string]*core.Ring{}
 	}
 	for _, r := range snap.Readings {
-		if r.Text != "" {
+		// A reading made of words has no series to keep — "无线" does not
+		// move. One that carries both a number and its wording does: the
+		// network's rate is a number of bytes per second written as "1.7
+		// KB/s", and the card's chart has nothing to draw without it.
+		if r.Text != "" && r.Value == 0 {
 			continue
 		}
 		ring := in.history[r.ID]

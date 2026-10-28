@@ -44,10 +44,10 @@ func main() {
 		panel.MarginDIP(displayScale))
 	fitted := panel.Fit(area.Width, area.Height, displayScale)
 
-	// The dashboard is the whole of a machine's page — its score, its cards,
-	// the battery, the programs it runs and the bar at the foot — and that
-	// page is composed for the design's own canvas. The classic pages are the
-	// panel as it opens on this display.
+	// The dashboard is one page for the machine and the devices beside it —
+	// its score, its cards, the mouse's card, the battery and the programs it
+	// runs — and that page is composed for the design's own canvas. The
+	// classic pages are the panel as it opens on this display.
 	shots := []struct {
 		name  string
 		row   string
@@ -56,8 +56,9 @@ func main() {
 		// size this display gives it.
 		design bool
 	}{
-		{"panel-dashboard", "system", app.ThemeDashboard, true},
-		{"panel-dashboard-mouse", "mouse", app.ThemeDashboard, true},
+		// No row: the dashboard opens on the machine's page, which is one page
+		// whichever monitor the app remembers.
+		{"panel-dashboard", "", app.ThemeDashboard, true},
 		{"panel-dashboard-settings", panel.SettingsPage, app.ThemeDashboard, true},
 		{"panel-mouse", "mouse", app.ThemeClassic, false},
 		{"panel-system", "system", app.ThemeClassic, false},
@@ -65,7 +66,9 @@ func main() {
 	}
 	for _, shot := range shots {
 		_, p := fixture(fitted, shot.theme)
-		p.SetSelected(shot.row)
+		if shot.row != "" {
+			p.SetSelected(shot.row)
+		}
 		w, h := fitted.Width, fitted.Height
 		if *width != 0 || *height != 0 {
 			if *width != 0 {

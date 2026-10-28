@@ -118,7 +118,7 @@ func (a *App) classic(c *ui.Context) {
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).Justify(ui.Start).Clip().Children(func() {
 			switch a.Selected() {
 			case SettingsPage:
-				a.settings(c, p, instances)
+				a.settings(c, p, instances, true)
 			default:
 				if in := a.Host.Instance(a.Selected()); in != nil {
 					a.detail(c, p, in)

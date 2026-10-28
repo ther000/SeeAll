@@ -13,6 +13,9 @@ const (
 	refreshSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6"/><path d="M20 4v7h-7"/></svg>`
 	plusSVG    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`
 	closeSVG   = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`
+	// backSVG is the way out of a page: the arrow the settings lead back to
+	// the machine by.
+	backSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5l-7 7 7 7"/></svg>`
 	// The dashboard's cards are named by what they measure rather than by a
 	// word, so each of the six parts of a machine has a mark of its own.
 	gpuSVG     = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="8.5" cy="12" r="2.3"/><circle cx="15.5" cy="12" r="2.3"/></svg>`
@@ -32,6 +35,7 @@ var (
 	iconRefresh = ui.MustParseSVG([]byte(refreshSVG))
 	iconPlus    = ui.MustParseSVG([]byte(plusSVG))
 	iconClose   = ui.MustParseSVG([]byte(closeSVG))
+	iconBack    = ui.MustParseSVG([]byte(backSVG))
 	iconGPU     = ui.MustParseSVG([]byte(gpuSVG))
 	iconMem     = ui.MustParseSVG([]byte(memSVG))
 	iconDisk    = ui.MustParseSVG([]byte(diskSVG))

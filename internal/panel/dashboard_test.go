@@ -10,10 +10,10 @@ import (
 	"seeall/internal/core"
 )
 
-// dashFixture is the machine the dashboard is drawn for: a score, the facts
-// across its top, the six parts of it, the battery and the programs behind
-// the numbers. It is the data the system plugin reports, injected, so that
-// the tests of the dashboard's layout do not wait for a machine.
+// dashFixture is the panel the dashboard is drawn for: a machine that scores
+// itself, names its parts and lists what it runs, and a mouse beside it. It is
+// the data the plugins report, injected, so that the tests of the dashboard's
+// layout do not wait for a machine or a device.
 func dashFixture(t *testing.T) (*app.Host, *App) {
 	t.Helper()
 	h := app.NewHost(t.TempDir())
@@ -32,6 +32,7 @@ func dashFixture(t *testing.T) (*app.Host, *App) {
 			{ID: "battery", Label: "电量", Value: 72, Unit: core.UnitPercent,
 				Severity: core.SeverityOK, Detail: "2 秒前"},
 			{ID: "link", Label: "连接", Text: "无线", Severity: core.SeverityOK},
+			{ID: "dpi", Label: "DPI", Value: 1200, Severity: core.SeverityNone},
 		},
 	})
 	h.Inject("system", core.Snapshot{
@@ -73,6 +74,7 @@ func dashFixture(t *testing.T) (*app.Host, *App) {
 	h.InjectHistory("system", "cpu", dashWave(5, 40, 0))
 	h.InjectHistory("system", "gpu", dashWave(4, 40, 3))
 	h.InjectHistory("system", "mem", dashWave(46, 40, 3))
+	h.InjectHistory("mouse", "battery", dashWave(72, 40, 6))
 
 	p := New(h)
 	p.SetSize(Fit(1920, 1040, 1))
@@ -91,9 +93,9 @@ func dashWave(v float64, count int, wobble float64) []float64 {
 
 // TestDashboardShowsTheMachineOnOnePage checks the dashboard's parts are where
 // it says they are: the score and the facts at the top, the six cards in the
-// order of the machine, the battery across the page, the programs under it,
-// and the bar at the foot — all of them inside the window, with nothing hung
-// off its edge.
+// order of the machine, the mouse's card under them, the battery, the programs
+// and the machine's own foot — all of them inside the window, with nothing
+// hung off its edge and nothing of the old foot bar left.
 func TestDashboardShowsTheMachineOnOnePage(t *testing.T) {
 	_, p := dashFixture(t)
 	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
@@ -130,46 +132,71 @@ func TestDashboardShowsTheMachineOnOnePage(t *testing.T) {
 			t.Errorf("%q is not to the right of %q", row[1], row[0])
 		}
 	}
-	if inWindow("电池").Y <= inWindow("网络").Y {
-		t.Error("the battery card sits no lower than the last row of cards")
+
+	// The mouse is not a tab and not another page: its card follows the
+	// machine's own readings and comes before the machine's battery.
+	mouse := inWindow("鼠标")
+	if mouse.Y <= inWindow("温度").Y {
+		t.Errorf("the mouse's card at y=%v sits above the machine's last cards at y=%v",
+			mouse.Y, inWindow("温度").Y)
+	}
+	if inWindow("电池").Y <= mouse.Y {
+		t.Errorf("the battery at y=%v sits above the mouse's card at y=%v",
+			inWindow("电池").Y, mouse.Y)
 	}
 	if inWindow("高占用进程").Y <= inWindow("电池").Y {
 		t.Error("the programs sit no lower than the battery")
 	}
-	// The bar's own numbers are the only ones named 异常项 and 监控项, which
-	// the card above it does not use.
-	if inWindow("异常项").Y <= inWindow("Quicker").Y {
-		t.Error("the bar sits no lower than the programs")
+
+	// The foot of the panel is the content's own edge: the bar that counted
+	// the window's monitors is gone.
+	for _, absent := range []string{"异常项", "监控项"} {
+		if tt.HasText(absent) {
+			t.Errorf("the page still shows the foot bar's %q: %v", absent, tt.Texts())
+		}
 	}
-	if inWindow("监控项").Y <= inWindow("Quicker").Y {
-		t.Error("the bar's numbers sit no lower than the programs")
+	if last := tt.Texts()[len(tt.Texts())-1]; last == "" {
+		t.Error("the page ends with an empty label")
 	}
 }
 
-// TestDashboardBarStaysAtTheFoot checks the bar is a foot and not a lid: when
-// the page is scrolled to its end, the last program is above the bar rather
-// than under it, and the bar's own three numbers are still on screen.
-func TestDashboardBarStaysAtTheFoot(t *testing.T) {
+// TestDashboardShowsTheMouseOnTheSamePage checks the mouse's card says what a
+// device card says: whose it is, how it is connected, its level, and the rest
+// of what it reports.
+func TestDashboardShowsTheMouseOnTheSamePage(t *testing.T) {
 	_, p := dashFixture(t)
 	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
 
-	// Scroll the page to its end, as a wheel over the cards does.
-	tt.Wheel(DesignWidth/2, DesignHeight/2, 0, 2000)
-	tt.Frame()
+	if !tt.HasText("鼠标") {
+		t.Fatalf("the machine's page does not name the mouse: %v", tt.Texts())
+	}
+	if !tt.HasText("72") {
+		t.Errorf("the mouse's level is not on the page: %v", tt.Texts())
+	}
+	if !tt.HasText("无线") {
+		t.Errorf("the mouse's card does not say how it is connected: %v", tt.Texts())
+	}
+	if !tt.HasText("DPI 1200") {
+		t.Errorf("the mouse's card does not say the rest of what it reports: %v", tt.Texts())
+	}
+}
 
-	bar, ok := tt.Find("异常项")
-	if !ok {
-		t.Fatalf("the bar shows no numbers: %v", tt.Texts())
+// TestADeviceWithoutDataKeepsItsCard checks a device that reports nothing is
+// still on the page, saying so: a card that disappears is a device the user
+// forgets the panel watches.
+func TestADeviceWithoutDataKeepsItsCard(t *testing.T) {
+	h, p := dashFixture(t)
+	h.Inject("mouse", core.Snapshot{Status: core.StatusOffline})
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+
+	if !tt.HasText("鼠标") {
+		t.Fatalf("a device that reports nothing lost its card: %v", tt.Texts())
 	}
-	last, ok := tt.Find("Quicker")
-	if !ok {
-		t.Fatalf("the page lists no programs: %v", tt.Texts())
+	if !tt.HasText("未连接") {
+		t.Errorf("the card does not say the device is not answering: %v", tt.Texts())
 	}
-	if last.Y+last.H > bar.Y {
-		t.Errorf("the last program at y=%v runs under the bar at y=%v", last.Y+last.H, bar.Y)
-	}
-	if bar.Y+bar.H > DesignHeight {
-		t.Errorf("the bar's numbers end at y=%v, below the panel's %d", bar.Y+bar.H, DesignHeight)
+	if !tt.HasText("—") {
+		t.Errorf("the card shows no level at all: %v", tt.Texts())
 	}
 }
 
@@ -228,28 +255,63 @@ func TestDashboardDegradesWithoutData(t *testing.T) {
 	}
 }
 
+// TestTheGearOpensTheSettingsAndTheBackReturns checks the dashboard has two
+// pages and one way between them: the header's gear opens the settings, and
+// the settings' back returns to the machine's page.
+func TestTheGearOpensTheSettingsAndTheBackReturns(t *testing.T) {
+	h, p := dashFixture(t)
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+	if err := tt.Click("打开设置"); err != nil {
+		t.Fatalf("the header offers no settings: %v", tt.Texts())
+	}
+	if p.Selected() != SettingsPage {
+		t.Fatalf("the gear showed %q, want the settings", p.Selected())
+	}
+
+	tt = ui.NewTester(p.View, DesignWidth, DesignHeight)
+	if _, ok := tt.Find("返回"); !ok {
+		t.Fatalf("the settings have no way back: %v", tt.Texts())
+	}
+	if !tt.HasText("主题") {
+		t.Errorf("the settings page lost its own rows: %v", tt.Texts())
+	}
+	if err := tt.Click("返回"); err != nil {
+		t.Fatal(err)
+	}
+	if p.Selected() == SettingsPage {
+		t.Fatal("back stayed in the settings")
+	}
+	if got := p.Selected(); got != h.LastInstance() {
+		t.Errorf("back chose %q, want the monitor the panel was on, %q", got, h.LastInstance())
+	}
+	tt = ui.NewTester(p.View, DesignWidth, DesignHeight)
+	if !tt.HasText("高占用进程") {
+		t.Errorf("back did not return to the machine's page: %v", tt.Texts())
+	}
+}
+
 // TestTheThemeIsThePanelsOwn checks the two looks are one setting: switching
 // it changes what the frame draws at once, and the host keeps the choice.
 func TestTheThemeIsThePanelsOwn(t *testing.T) {
 	h, p := fixture(t) // the classic look
 	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
-	if !tt.HasText("SeeAll") {
-		t.Fatalf("the classic look has no title bar: %v", tt.Texts())
+	if _, ok := tt.Find("本机"); !ok {
+		t.Fatalf("the classic look has no tab for the machine: %v", tt.Texts())
 	}
 
 	h.SetTheme(app.ThemeDashboard)
 	tt = ui.NewTester(p.View, DesignWidth, DesignHeight)
-	if tt.HasText("SeeAll") {
-		t.Errorf("the dashboard draws the classic title bar: %v", tt.Texts())
+	if _, ok := tt.Find("本机"); ok {
+		t.Errorf("the dashboard still draws the classic's tabs: %v", tt.Texts())
 	}
-	if _, ok := tt.Find("异常项"); !ok {
-		t.Errorf("the dashboard draws no bar: %v", tt.Texts())
+	if _, ok := tt.Find("打开设置"); !ok {
+		t.Errorf("the dashboard draws no way into the settings: %v", tt.Texts())
 	}
 
 	h.SetTheme(app.ThemeClassic)
 	tt = ui.NewTester(p.View, DesignWidth, DesignHeight)
-	if !tt.HasText("SeeAll") {
-		t.Errorf("switching back does not bring the title bar back: %v", tt.Texts())
+	if _, ok := tt.Find("本机"); !ok {
+		t.Errorf("switching back does not bring the tabs back: %v", tt.Texts())
 	}
 }
 
@@ -278,10 +340,12 @@ func TestTheSettingsChooseTheLook(t *testing.T) {
 	}
 
 	// The frame after the choice is the dashboard's, and it stays on the
-	// settings page: choosing a look is not choosing a monitor.
+	// settings page: choosing a look is not choosing a monitor. The settings
+	// list every monitor by name in both looks, so the way back is what says
+	// the page is the dashboard's.
 	tt = ui.NewTester(func(c *ui.Context) { p.View(c) }, DesignWidth, DesignHeight)
-	if tt.HasText("SeeAll") {
-		t.Errorf("the panel still draws the classic title bar: %v", tt.Texts())
+	if _, ok := tt.Find("返回"); !ok {
+		t.Errorf("the settings page is not the dashboard's: %v", tt.Texts())
 	}
 	if p.Selected() != SettingsPage {
 		t.Errorf("choosing a look switched the page to %q", p.Selected())

@@ -14,9 +14,15 @@ import (
 
 // settings is the panel's settings page: which monitors run, what each one
 // watches, and how the app itself behaves.
-func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
+//
+// title asks for the page's own heading. The classic look has no header to
+// name the page and needs it; the dashboard names it in its header, beside the
+// button that leads back, and would otherwise say it twice.
+func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance, title bool) {
 	ui.Scroll(c).Fill().Padding(CardGap, Gutter).Gap(CardGap).Children(func() {
-		ui.Text(c, "设置").FontSize(13).Bold()
+		if title {
+			ui.Text(c, "设置").FontSize(13).Bold()
+		}
 		card(c, p).Children(func() {
 			label(c, p, "应用")
 			controlRow(c, p, "开机自启", "登录后在托盘里待命", func() {

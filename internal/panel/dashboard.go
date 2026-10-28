@@ -2,6 +2,7 @@ package panel
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -9,41 +10,45 @@ import (
 	"seeall/internal/core"
 )
 
-// The dashboard is the panel's other look. Where the classic page is a title
-// bar over a row of tabs over cards of readings, the dashboard is one canvas:
-// how the machine is doing across the top, what each part of it is doing on
-// the cards under that, and a bar at the foot that says what is watched and
-// offers the two things the panel can do.
+// The dashboard is the panel's other look: one page for the whole machine.
 //
-// It is drawn from the top of the window down, and its page scrolls between a
-// header that stays and a bar that stays, so the score and the way out are
-// always where the eye left them.
+// Where the classic page has a title bar, a row of tabs and a page per monitor,
+// the dashboard answers one question — how is this machine doing — with the
+// score across the top, the machine's six parts in cards under it, a card for
+// every other device the panel watches, the battery across the page, and the
+// programs behind the numbers. A mouse's level belongs beside the processor's
+// load rather than behind a tab, so the panel has no tabs in this look: the
+// only other page is the settings, which the header's gear opens and whose own
+// header leads back.
 //
-// The sizes below are the ones a 660×840 panel — the design's own size — holds
-// with nothing pushed out of the window: a score and the machine's four facts,
-// three rows of cards, the battery, the programs behind the numbers, and the
-// bar. A narrower window keeps every size and gets narrower cards, and a
-// shorter one scrolls, which is what the page between the header and the bar
-// is for.
+// The header stays as the page scrolls, so the score and the two things the
+// panel can do are always where the eye left them.
+//
+// The sizes below are the ones a 660×840 panel — the design's own size — holds,
+// with the machine's cards, the device card, the battery and the programs all
+// on the page. A narrower window keeps every size and gets narrower cards, and
+// a shorter one scrolls, which is what the page under the header is for.
 const (
 	// dashGutter is the room a page keeps from its edges, and dashGap the room
 	// between two cards.
 	dashGutter = 16
-	dashGap    = 12
+	dashGap    = 10
+	// dashBottom is the room the page keeps below its last card.
+	dashBottom = 16
 	// dashCardH is the height of a reading's card: its two lines of text, the
 	// shape of its recent values and the line under them, inside the padding.
-	dashCardH   = 112
+	dashCardH   = 108
 	dashCardPad = 12
 	dashCardR   = 20
-	dashChartH  = 18
-	// dashBatteryH is the battery's card, which has no shape in it.
+	dashChartH  = 14
+	// dashBatteryH and dashDeviceH are the cards that have no shape in them: a
+	// battery's level and a device's, which is one number and a state.
 	dashBatteryH = 96
+	dashDeviceH  = 96
 	// dashProcRowH is one program's line in the list, and dashProcPad the room
 	// the list keeps inside its card.
 	dashProcRowH = 19
-	dashProcPad  = 12
-	// dashBarPad is the room inside the bar at the foot.
-	dashBarPad = 5
+	dashProcPad  = 10
 
 	// dashValueSize is a card's number, dashUnitSize the unit beside it:
 	// the number is the card's subject, the unit only says what it counts.
@@ -53,10 +58,10 @@ const (
 	dashLabelSize = 13.5
 	dashDetailSZ  = 11.5
 	dashProcSize  = 12.5
-	dashStatSize  = 22
-	dashStatLabel = 12
 	dashScoreSize = 42
 	dashNoteSize  = 13
+	// dashActionSize is the header's two icon buttons.
+	dashActionSize = 15
 )
 
 // dashMetricIDs are the readings the dashboard makes a card of, in the order
@@ -81,8 +86,6 @@ type dash struct {
 
 	// canvas is the window's background, glow the warm light over its foot.
 	canvas, glow ui.LinearGradient
-	// bar is the foot's own gradient: the canvas darkened, warmed at the foot.
-	bar ui.LinearGradient
 	// card is the face of a card, badge and pill the two small surfaces on it.
 	card, badge, pill ui.Color
 	// hairline separates two groups inside a surface.
@@ -134,10 +137,6 @@ func dashFor(c *ui.Context) dash {
 			{Color: ui.RGBA(58, 51, 43, 0), At: 0.76},
 			{Color: ui.RGBA(104, 84, 58, 0.85), At: 1},
 		}},
-		bar: ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{
-			{Color: ui.Hex("#2b2c3d"), At: 0.15},
-			{Color: ui.Hex("#3a332b"), At: 1},
-		}},
 		card:      ui.RGBA(255, 255, 255, 0.05),
 		badge:     ui.RGBA(255, 255, 255, 0.07),
 		pill:      ui.RGBA(255, 255, 255, 0.05),
@@ -157,9 +156,8 @@ func dashFor(c *ui.Context) dash {
 }
 
 // palette is the dashboard's look in the shape the pages it borrows draw with:
-// the settings page and a device's compact cards are the ones the panel had
-// before the dashboard, and they take its surfaces without losing their
-// layout.
+// the settings page is the one the panel had before the dashboard, and it
+// takes its surfaces without losing its layout.
 func (d dash) palette() palette {
 	return palette{
 		Theme:      d.Theme,
@@ -174,96 +172,99 @@ func (d dash) palette() palette {
 	}
 }
 
-// dashboard draws the whole window in the dashboard's look.
+// dashboard draws the whole window in the dashboard's look: the settings, when
+// they were asked for, and the machine's one page otherwise.
 func (a *App) dashboard(c *ui.Context) {
 	d := dashFor(c)
-	instances := a.Host.Instances()
-	a.ensureSelection(instances)
-	sel := a.Selected()
+	instances := a.sorted(a.Host.Instances())
 
 	ui.Column(c).Fill().Draw(func(pt *ui.Painter, r ui.Rect) {
 		pt.FillGradient(r, d.canvas, 0)
 		pt.FillGradient(r, d.glow, 0)
 	}).Children(func() {
-		switch {
-		case sel == SettingsPage:
-			a.dashPage(c, func() { a.settings(c, d.palette(), instances) })
-		default:
-			in := a.Host.Instance(sel)
-			switch {
-			case in == nil:
-				a.dashPage(c, func() { a.emptyDetail(c, d.palette()) })
-			case in.Manifest().Combined:
-				// A device whose readings describe one thing — a mouse and
-				// its battery, its link and its DPI — keeps the card that
-				// holds them together. They are not the parts of a machine,
-				// and a grid of them would be three cards of one subject.
-				a.dashHeader(c, d, in)
-				a.dashPage(c, func() { a.detail(c, d.palette(), in) })
-			case machineSnapshot(in.Snapshot()):
-				a.dashHeader(c, d, in)
-				a.dashPage(c, func() { a.dashBody(c, d, in) })
-			default:
-				// A device the dashboard has no composition for — a mouse,
-				// a sensor — keeps the compact cards it had: one card per
-				// group of readings, two to a row, under the heading that
-				// names the device.
-				a.dashHeader(c, d, in)
-				a.dashPage(c, func() { a.detail(c, d.palette(), in) })
-			}
+		if a.Selected() == SettingsPage {
+			a.dashSettingsHeader(c, d)
+			a.dashPage(c, func() {
+				a.settings(c, d.palette(), instances, false)
+			})
+			return
 		}
-		a.dashBar(c, d, instances)
+		if len(instances) == 0 {
+			a.dashHeader(c, d, core.Snapshot{})
+			a.dashPage(c, func() { a.emptyDetail(c, d.palette()) })
+			return
+		}
+		machine, devices := dashSplit(instances)
+		var snap core.Snapshot
+		if machine != nil {
+			snap = machine.Snapshot()
+		}
+		a.dashHeader(c, d, snap)
+		a.dashPage(c, func() { a.dashBody(c, d, machine, snap, devices) })
 	})
 }
 
-// machineSnapshot reports whether a page describes a machine the dashboard
-// can compose: it scores itself, names its parts, or lists what it runs. A
-// page of a device's readings falls back to the compact cards.
-func machineSnapshot(snap core.Snapshot) bool {
-	if snap.Health > 0 || len(snap.Facts) > 0 || len(snap.Processes) > 0 {
-		return true
-	}
-	for _, id := range dashMetricIDs {
-		if _, ok := snap.Reading(id); ok {
-			return true
+// dashSplit divides the panel's monitors into the machine the dashboard
+// composes and the devices it gives a card each. The machine is the monitor
+// that watches the machine itself; a plugin whose readings all describe one
+// device — a mouse and its battery — is a device, whichever order the panel
+// lists the monitors in.
+func dashSplit(instances []*app.Instance) (machine *app.Instance, devices []*app.Instance) {
+	for _, in := range instances {
+		if machine == nil && !in.Manifest().Combined {
+			machine = in
+			continue
 		}
+		devices = append(devices, in)
 	}
-	return false
+	return machine, devices
 }
 
-// dashPage is the room a page scrolls in: everything between the header and
-// the bar, clipped at both ends so that a long page cannot draw over either.
+// dashPage is the room a page scrolls in: everything under the header, clipped
+// at both ends so that a long page cannot draw over the header or run out of
+// the window's foot.
 func (a *App) dashPage(c *ui.Context, page func()) {
 	ui.Column(c).Grow(1).Shrink(1).Basis(0).Justify(ui.Start).Clip().Children(page)
 }
 
 // dashHeader is the top of the dashboard: how the machine is doing in one
-// number, and the four pills that say what the machine is.
-func (a *App) dashHeader(c *ui.Context, d dash, in *app.Instance) {
-	snap := in.Snapshot()
-	ui.Column(c).Shrink(0).Padding(10, dashGutter, 6, dashGutter).Gap(7).Children(func() {
-		ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Baseline).Children(func() {
-			if snap.Health > 0 {
-				// A sun for the score's color, set on the number's own line:
-				// the eye reads "90 很好" as one phrase, not as three.
-				ui.Icon(c, iconLogo).FontSize(20).TextColor(d.mint)
-				ui.Text(c, fmt.Sprintf("%d", snap.Health)).FontSize(dashScoreSize).Bold().
-					TextColor(d.Text).NoWrap()
-				if note := snap.HealthNote; note != "" {
-					ui.Text(c, note).FontSize(dashNoteSize).TextColor(d.secondary).
-						NoWrap().Grow(1)
+// number, the pills that say what the machine is, and the two things the panel
+// can do.
+func (a *App) dashHeader(c *ui.Context, d dash, snap core.Snapshot) {
+	ui.Column(c).Shrink(0).Padding(8, dashGutter, 4, dashGutter).Gap(6).Children(func() {
+		ui.Row(c).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Grow(1).Shrink(1).Basis(0).Gap(8).AlignItems(ui.Baseline).Children(func() {
+				if snap.Health > 0 {
+					// A sun for the score's color, set on the number's own
+					// line: the eye reads "90 很好" as one phrase, not three.
+					ui.Icon(c, iconLogo).FontSize(20).TextColor(d.mint)
+					ui.Text(c, fmt.Sprintf("%d", snap.Health)).FontSize(dashScoreSize).Bold().
+						TextColor(d.Text).NoWrap()
+					if note := snap.HealthNote; note != "" {
+						ui.Text(c, note).FontSize(dashNoteSize).TextColor(d.secondary).NoWrap()
+					}
+					return
 				}
-			} else {
-				// A source that does not score itself still gets a heading:
-				// what is being watched, and in what state.
+				// A machine that does not score itself still gets a heading:
+				// what is being watched, and in what state. With no monitor
+				// to name, the heading is the panel's own.
 				ui.Column(c).Grow(1).Gap(1).Children(func() {
-					ui.Text(c, deviceName(snap)).FontSize(20).Bold().
-						NoWrap().MaxLines(1)
+					title := snap.Title
+					if title == "" {
+						title = "SeeAll"
+					}
+					ui.Text(c, title).FontSize(20).Bold().NoWrap().MaxLines(1)
 					if snap.Subtitle != "" {
-						ui.Text(c, snap.Subtitle).FontSize(11.5).TextColor(d.muted).
+						ui.Text(c, snap.Subtitle).FontSize(dashDetailSZ).TextColor(d.muted).
 							NoWrap().MaxLines(1)
 					}
 				})
+			})
+			if dashIconButton(c, d, "刷新", "刷新全部（Ctrl+R）", iconRefresh).Clicked() {
+				a.Host.Refresh()
+			}
+			if dashIconButton(c, d, "打开设置", "设置", iconGear).Clicked() {
+				a.SetSelected(SettingsPage)
 			}
 		})
 		if len(snap.Facts) > 0 {
@@ -275,6 +276,49 @@ func (a *App) dashHeader(c *ui.Context, d dash, in *app.Instance) {
 			})
 		}
 	})
+}
+
+// dashSettingsHeader is the settings page's heading: the way back to the
+// machine, and what the page is.
+func (a *App) dashSettingsHeader(c *ui.Context, d dash) {
+	ui.Row(c).Shrink(0).Padding(10, dashGutter, 6, dashGutter).Gap(8).AlignItems(ui.Center).Children(func() {
+		if dashIconButton(c, d, "返回", "返回", iconBack).Clicked() {
+			a.dashBack()
+		}
+		ui.Text(c, "设置").FontSize(20).Bold().Grow(1).NoWrap()
+	})
+}
+
+// dashBack leaves the settings for the machine's page. The dashboard is one
+// page, so "back" is the monitor the panel was on last: the app remembers that
+// when a monitor is chosen, and going to the settings does not overwrite it.
+func (a *App) dashBack() {
+	target := a.Host.LastInstance()
+	if a.Host.Instance(target) == nil {
+		target = ""
+		if instances := a.sorted(a.Host.Instances()); len(instances) > 0 {
+			target = instances[0].ID
+		}
+	}
+	if target == "" {
+		return
+	}
+	a.SetSelected(target)
+}
+
+// dashIconButton is one of the header's actions: an icon with no box around
+// it, because the header is the box. It brightens as the pointer finds it.
+func dashIconButton(c *ui.Context, d dash, label, tooltip string, icon *ui.SVG) ui.Element {
+	button := ui.Button(c, "").Label(label).Description(tooltip).Tooltip(tooltip).
+		Padding(4, 6).Radius(10).Background(ui.Transparent).Border(0, ui.Transparent)
+	tint := d.muted
+	if button.Hovered() {
+		tint = d.Text
+	}
+	button.Children(func() {
+		ui.Icon(c, icon).FontSize(dashActionSize).TextColor(tint)
+	})
+	return button
 }
 
 // dashFactGap is the room between two pills, and dashFactPadX the room a pill
@@ -318,12 +362,12 @@ func dashFact(c *ui.Context, d dash, text string, share float32) ui.Element {
 	return pill
 }
 
-// dashBody is the scrolling part of the dashboard: the machine's cards, the
-// battery across the page, and the programs behind the numbers.
-func (a *App) dashBody(c *ui.Context, d dash, in *app.Instance) {
-	snap := in.Snapshot()
-	ui.Scroll(c).Fill().Padding(0, dashGutter, dashGap, dashGutter).Gap(dashGap).Children(func() {
-		a.dashCards(c, d, in, snap)
+// dashBody is the scrolling part of the dashboard, top to bottom: the
+// machine's cards, a card for every other device, the battery across the page,
+// and the programs behind the numbers.
+func (a *App) dashBody(c *ui.Context, d dash, machine *app.Instance, snap core.Snapshot, devices []*app.Instance) {
+	ui.Scroll(c).Fill().Padding(0, dashGutter, dashBottom, dashGutter).Gap(dashGap).Children(func() {
+		a.dashCards(c, d, machine, snap, devices)
 		if battery, ok := snap.Reading("battery"); ok {
 			a.dashBattery(c, d, snap, battery)
 		}
@@ -333,22 +377,28 @@ func (a *App) dashBody(c *ui.Context, d dash, in *app.Instance) {
 	})
 }
 
-// dashCards lays the readings out two to a row, in the order the dashboard
-// composes them: the machine's own readings first, then whatever else the
-// source reports.
-func (a *App) dashCards(c *ui.Context, d dash, in *app.Instance, snap core.Snapshot) {
-	readings := dashReadings(snap)
-	if len(readings) == 0 {
-		return
-	}
+// dashCards lays the machine's readings out two to a row, and the devices the
+// panel also watches under them: a device is not a part of the machine, so its
+// card follows the machine's own readings rather than sitting among them, and
+// comes before the battery, which is the machine's.
+func (a *App) dashCards(c *ui.Context, d dash, machine *app.Instance, snap core.Snapshot, devices []*app.Instance) {
 	half := float32(a.Size.Width-2*dashGutter-dashGap) / 2
+	readings := dashReadings(snap)
 	for i := 0; i < len(readings); i += 2 {
 		row := readings[i:min(i+2, len(readings))]
 		ui.Row(c).Shrink(0).Gap(dashGap).Children(func() {
 			for _, r := range row {
-				a.dashCard(c, d, in, snap, r, half)
+				a.dashCard(c, d, machine, snap, r, half)
 			}
 		})
+	}
+	// A device's card takes the whole page width, like the battery's: it is
+	// not a cell of the machine's grid but a card of its own, and a card
+	// standing alone in a half-empty row reads as a layout that went wrong
+	// rather than as a row waiting for a second device.
+	full := float32(a.Size.Width - 2*dashGutter)
+	for _, in := range devices {
+		a.dashDevice(c, d, in, full)
 	}
 }
 
@@ -397,10 +447,83 @@ func (a *App) dashCard(c *ui.Context, d dash, in *app.Instance, snap core.Snapsh
 	})
 }
 
+// dashDevice is a device the panel watches besides the machine, as one card
+// among the machine's: what it is called, how it is connected, its level and
+// what else it reports. A device that is not answering still gets its card —
+// a card that vanishes is a device the user forgets the panel watches.
+func (a *App) dashDevice(c *ui.Context, d dash, in *app.Instance, width float32) {
+	snap := in.Snapshot()
+	primary, reported := snap.Lead()
+	value, unit := "—", ""
+	if reported {
+		value, unit = dashValue(primary)
+	}
+	ui.Column(c).Shrink(0).Width(width).Height(dashDeviceH).MaxHeight(dashDeviceH).
+		Padding(dashCardPad).Gap(2).Radius(dashCardR).Background(d.card).Children(func() {
+		ui.Row(c).Shrink(0).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, iconFor(in.Manifest().Icon)).FontSize(13).
+				TextColor(dashColor(d, primary))
+			ui.Text(c, in.Name).FontSize(dashLabelSize).TextColor(d.muted).
+				NoWrap().MaxLines(1).Grow(1)
+			if badge := dashDeviceBadge(snap); badge != "" {
+				dashBadge(c, d, badge)
+			}
+		})
+		dashBig(c, d, value, unit)
+		if detail := dashDeviceDetail(snap, primary, reported); detail != "" {
+			ui.Text(c, detail).FontSize(dashDetailSZ).TextColor(d.muted).
+				NoWrap().MaxLines(1)
+		}
+	})
+}
+
+// dashDeviceBadge is how a device is connected, in the device's own words: a
+// mouse says "无线". A device that has stopped answering says so instead.
+func dashDeviceBadge(snap core.Snapshot) string {
+	if len(snap.Readings) == 0 || snap.Status == core.StatusOffline {
+		return "未连接"
+	}
+	if link, ok := snap.Reading("link"); ok {
+		if text := link.Format(); text != "" {
+			return text
+		}
+	}
+	if snap.Status == core.StatusOK {
+		return ""
+	}
+	return snap.Status.String()
+}
+
+// dashDeviceDetail is what else a device reports, on its card's one line: the
+// level is the card's number and the connection its badge, and everything else
+// goes here, as "DPI 1200".
+func dashDeviceDetail(snap core.Snapshot, primary core.Reading, reported bool) string {
+	parts := make([]string, 0, len(snap.Readings))
+	for _, r := range snap.Readings {
+		if r.ID == "link" || reported && r.ID == primary.ID {
+			continue
+		}
+		text := r.Format()
+		if text == "" {
+			continue
+		}
+		if r.Label != "" {
+			text = r.Label + " " + text
+		}
+		parts = append(parts, text)
+	}
+	return strings.Join(parts, " · ")
+}
+
 // dashNumber is a reading's value set large, with its unit beside it: the one
 // thing on a card that is read from across the room.
 func dashNumber(c *ui.Context, d dash, r core.Reading) {
 	value, unit := dashValue(r)
+	dashBig(c, d, value, unit)
+}
+
+// dashBig is a card's number and its unit, set on one baseline.
+func dashBig(c *ui.Context, d dash, value, unit string) {
 	ui.Row(c).Shrink(0).AlignItems(ui.Baseline).Gap(0).Children(func() {
 		ui.Text(c, value).FontSize(dashValueSize).Bold().TextColor(d.Text).
 			NoWrap().MaxLines(1)
@@ -467,104 +590,4 @@ func (a *App) dashProcesses(c *ui.Context, d dash, procs []core.Process) {
 			})
 		}
 	})
-}
-
-// dashBar is the foot of the panel: which monitor is shown and the two things
-// the panel can do, a rule, and how the machine stands. It does not scroll
-// with the page: the way out of a long page must not be at the end of it.
-func (a *App) dashBar(c *ui.Context, d dash, instances []*app.Instance) {
-	items := a.sorted(instances)
-	ui.Column(c).Shrink(0).Margin(0, dashGap, dashGap, dashGap).
-		Padding(dashBarPad, 14).Gap(3).Radius(22).Border(1, ui.RGBA(255, 255, 255, 0.06)).
-		LinearGradient(d.bar).Children(func() {
-		ui.Row(c).Shrink(0).MinHeight(24).Gap(12).AlignItems(ui.Center).Children(func() {
-			for _, in := range items {
-				a.dashReport(c, d, in)
-			}
-			ui.Spacer(c).Grow(1)
-			if dashIconButton(c, d, "刷新", "刷新全部（Ctrl+R）", iconRefresh, false).Clicked() {
-				a.Host.Refresh()
-			}
-			on := a.Selected() == SettingsPage
-			if dashIconButton(c, d, "打开设置", "设置", iconGear, on).Clicked() {
-				a.SetSelected(SettingsPage)
-			}
-		})
-		ui.Box(c).Shrink(0).Height(1).Background(d.hairline)
-		ui.Row(c).Shrink(0).AlignItems(ui.End).Children(func() {
-			dashStat(c, d, "可用空间", a.dashFreeSpace(items))
-			dashStat(c, d, "异常项", dashProblems(items))
-			dashStat(c, d, "监控项", fmt.Sprintf("%d", len(items)))
-		})
-	})
-}
-
-// dashIconButton is one of the foot's two actions: an icon with no box around
-// it, because the bar itself is the box.
-func dashIconButton(c *ui.Context, d dash, label, tooltip string, icon *ui.SVG, on bool) ui.Element {
-	button := ui.Button(c, "").Label(label).Description(tooltip).Tooltip(tooltip).
-		Padding(4, 8).Radius(10).Background(ui.Transparent).Border(0, ui.Transparent)
-	button.Children(func() {
-		ui.Icon(c, icon).FontSize(15).TextColor(colorIf(on, d.mint, d.secondary))
-	})
-	return button
-}
-
-// dashReport is one monitor in the foot's first line: its icon and its name,
-// lit while its page is the one on screen.
-func (a *App) dashReport(c *ui.Context, d dash, in *app.Instance) {
-	on := a.Selected() == in.ID
-	tab := ui.Button(c, "").Label(in.Name).Description("查看" + in.Name).Tooltip(in.Name)
-	tab.Shrink(0).Padding(2, 6).Radius(10).Background(ui.Transparent).
-		Border(0, ui.Transparent).FocusRing(false)
-	tab.Children(func() {
-		ui.Icon(c, iconFor(in.Manifest().Icon)).FontSize(13).
-			TextColor(colorIf(on, d.mint, d.muted))
-		ui.Text(c, in.Name).FontSize(12.5).NoWrap().MaxLines(1).
-			TextColor(colorIf(on, d.Text, d.muted))
-	})
-	if tab.Clicked() {
-		a.SetSelected(in.ID)
-	}
-}
-
-// dashStat is one of the three numbers at the foot: what it counts above,
-// what it is under.
-func dashStat(c *ui.Context, d dash, label, value string) {
-	ui.Column(c).Grow(1).Basis(0).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, value).FontSize(dashStatSize).Bold().NoWrap().MaxLines(1)
-		ui.Text(c, label).FontSize(dashStatLabel).TextColor(d.muted).NoWrap()
-	})
-}
-
-// dashFreeSpace is the room left on the machine's disk, from whichever monitor
-// watches it: the bar belongs to the window rather than to one page, and a
-// device's page still has a machine under it. A dash when nothing watches the
-// disk.
-func (a *App) dashFreeSpace(items []*app.Instance) string {
-	for _, in := range items {
-		if r, ok := in.Snapshot().Reading("disk"); ok {
-			return core.FormatBytes(r.Value)
-		}
-	}
-	return "—"
-}
-
-// dashProblems counts what wants the user's eye across every monitor: a
-// reading at a warning or worse, and a source that is well or badly off. The
-// bar counts the window's trouble, so it must not forget the page not shown.
-func dashProblems(items []*app.Instance) string {
-	n := 0
-	for _, in := range items {
-		snap := in.Snapshot()
-		for _, r := range snap.Readings {
-			if r.Severity == core.SeverityWarn || r.Severity == core.SeverityCritical {
-				n++
-			}
-		}
-		if snap.Status == core.StatusWarn || snap.Status == core.StatusError {
-			n++
-		}
-	}
-	return fmt.Sprintf("%d", n)
 }
