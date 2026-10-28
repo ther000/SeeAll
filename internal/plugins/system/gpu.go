@@ -44,3 +44,64 @@ func shortGPUName(name string) string {
 	}
 	return strings.TrimSpace(name)
 }
+
+// gpuPlaceholderName stands in when a machine's graphics can be counted but no
+// card could be enumerated. It is not a model, so it never becomes a badge.
+const gpuPlaceholderName = "显卡"
+
+// gpuModelMax is how much of a model the GPU card's badge holds before the
+// panel would cut it in the middle of a word.
+const gpuModelMax = 18
+
+// gpuBrandWord is a word of a graphics card's name that says who made it
+// rather than which one it is.
+var gpuBrandWord = map[string]bool{
+	"geforce": true, "nvidia": true,
+	"radeon": true, "amd": true,
+	"intel": true,
+	// "Graphics" and "GPU" end half the drivers' names: "UHD Graphics 630",
+	// "RTX 3060 Laptop GPU".
+	"graphics": true, "gpu": true,
+}
+
+// gpuModel is the badge on the GPU card: the model, without the brand words a
+// narrow badge has no room for. "GeForce RTX 3060 Laptop GPU" reads
+// "RTX 3060 Laptop".
+func gpuModel(name string) string {
+	if name == "" || name == gpuPlaceholderName {
+		return ""
+	}
+	fields := strings.Fields(shortGPUName(name))
+	kept := make([]string, 0, len(fields))
+	for _, word := range fields {
+		if gpuBrandWord[strings.ToLower(word)] {
+			continue
+		}
+		kept = append(kept, word)
+	}
+	// A name that was nothing but brand words — an integrated card called
+	// "Radeon Graphics" — still has to say something.
+	model := strings.Join(kept, " ")
+	if model == "" {
+		model = strings.Join(fields, " ")
+	}
+	if model == "" {
+		return ""
+	}
+	return clip(model, gpuModelMax)
+}
+
+// clip shortens a label to at most max characters, at a word boundary when
+// there is one, so that a badge does not end in half a word.
+func clip(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	for i := max - 1; i > 0; i-- {
+		if runes[i] == ' ' {
+			return string(runes[:i])
+		}
+	}
+	return string(runes[:max])
+}

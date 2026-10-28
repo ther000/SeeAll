@@ -82,6 +82,68 @@ func TestSpellMinutes(t *testing.T) {
 	}
 }
 
+// TestGPUModelKeepsTheModelNotTheBrand checks the GPU card's badge: the panel
+// puts it beside a title that already says "GPU", so "GeForce RTX 3060 Laptop
+// GPU" must not spend the badge on words that say who made the card.
+func TestGPUModelKeepsTheModelNotTheBrand(t *testing.T) {
+	cases := map[string]string{
+		"GeForce RTX 3060 Laptop GPU":                 "RTX 3060 Laptop",
+		"NVIDIA GeForce RTX 4090":                     "RTX 4090",
+		"AMD Radeon RX 6800M":                         "RX 6800M",
+		"Intel(R) UHD Graphics 630":                   "UHD 630",
+		"Intel Iris Xe Graphics":                      "Iris Xe",
+		"Radeon(TM) Graphics":                         "Radeon Graphics",
+		"NVIDIA GeForce RTX 4070 Ti SUPER Laptop GPU": "RTX 4070 Ti SUPER",
+		"Microsoft Basic Render Driver":               "Microsoft Basic",
+	}
+	for raw, want := range cases {
+		if got := gpuModel(raw); got != want {
+			t.Errorf("gpuModel(%q) = %q, want %q", raw, got, want)
+		}
+	}
+	// A machine whose graphics could be counted but not named has no model to
+	// show, and the card's badge stays empty rather than saying "显卡".
+	for _, nothing := range []string{"", gpuPlaceholderName} {
+		if got := gpuModel(nothing); got != "" {
+			t.Errorf("gpuModel(%q) = %q, want no badge", nothing, got)
+		}
+	}
+}
+
+// TestGPUModelFitsTheBadge checks the length the panel's badge has room for: a
+// model is cut at a word boundary, so a badge never ends in half a word.
+func TestGPUModelFitsTheBadge(t *testing.T) {
+	if gpuModelMax != 18 {
+		t.Errorf("the badge fits %d characters, want 18", gpuModelMax)
+	}
+	cases := []struct {
+		in   string
+		max  int
+		want string
+	}{
+		{"RTX 4090 Laptop", 18, "RTX 4090 Laptop"},
+		{"RTX 4070 Ti SUPER Laptop", 18, "RTX 4070 Ti SUPER"},
+		{"ABCDEFGHIJ", 4, "ABCD"},
+		{"中文显卡", 3, "中文显"},
+		{"short", 10, "short"},
+		{"", 5, ""},
+	}
+	for _, c := range cases {
+		if got := clip(c.in, c.max); got != c.want {
+			t.Errorf("clip(%q, %d) = %q, want %q", c.in, c.max, got, c.want)
+		}
+	}
+	for _, raw := range []string{
+		"GeForce RTX 3060 Laptop GPU",
+		"NVIDIA GeForce RTX 4070 Ti SUPER Laptop GPU",
+		"Microsoft Basic Render Driver",
+	} {
+		if got := gpuModel(raw); len([]rune(got)) > gpuModelMax {
+			t.Errorf("gpuModel(%q) = %q, longer than the badge", raw, got)
+		}
+	}
+}
+
 // TestDiskSeverityColorsByHowFullItIs checks the free-space number's color: a
 // volume past 85% gone is worth a look, one past 95% is a problem.
 func TestDiskSeverityColorsByHowFullItIs(t *testing.T) {

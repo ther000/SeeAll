@@ -12,17 +12,10 @@ import (
 	"seeall/internal/plugin"
 )
 
-// settings is the panel's settings page: which monitors run, what each one
-// watches, and how the app itself behaves.
-//
-// title asks for the page's own heading. The classic look has no header to
-// name the page and needs it; the dashboard names it in its header, beside the
-// button that leads back, and would otherwise say it twice.
-func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance, title bool) {
+// settings is the panel's settings page: how the app itself behaves, and what
+// each monitor watches.
+func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance) {
 	ui.Scroll(c).Fill().Padding(CardGap, Gutter).Gap(CardGap).Children(func() {
-		if title {
-			ui.Text(c, "设置").FontSize(13).Bold()
-		}
 		card(c, p).Children(func() {
 			label(c, p, "应用")
 			controlRow(c, p, "开机自启", "登录后在托盘里待命", func() {
@@ -36,50 +29,11 @@ func (a *App) settings(c *ui.Context, p palette, instances []*app.Instance, titl
 				}
 			})
 			hline(c, p)
-			controlRow(c, p, "通知", "电量低、状态异常时弹系统通知", func() {
-				on := a.Host.Notifications()
-				// Named for what it does rather than for the row it sits in:
-				// assistive technology reads "允许通知", not a second "通知".
-				if ui.Switch(c, &on).Label("允许通知").Changed() {
-					a.Host.SetNotifications(on)
-				}
-			})
-			hline(c, p)
 			a.opacityRow(c, p)
-			hline(c, p)
-			a.themeRow(c, p)
 		})
 
 		for _, in := range a.sorted(instances) {
 			a.instanceCard(c, p, in)
-		}
-
-		a.addCard(c, p)
-	})
-}
-
-// themeRow is which look the panel is drawn in. The two looks are the two
-// arrangements the panel has had, and the choice is the user's rather than
-// the desktop's: the dashboard is a dark panel by design, so it must not
-// depend on the system's appearance.
-//
-// A change takes effect on the next frame — the panel reads the choice from
-// the host as it builds each one — and the host writes it to the settings
-// file, so the next launch opens in the look the user left.
-func (a *App) themeRow(c *ui.Context, p palette) {
-	labels := []string{"深蓝仪表盘", "经典"}
-	values := []string{app.ThemeDashboard, app.ThemeClassic}
-	shown := labels[0]
-	if a.Host.Theme() == app.ThemeClassic {
-		shown = labels[1]
-	}
-	controlRow(c, p, "主题", "仪表盘按健康分排布，经典保留标签页", func() {
-		if ui.Select(c, &shown, labels).Label("主题").Changed() {
-			chosen := values[0]
-			if shown == labels[1] {
-				chosen = values[1]
-			}
-			a.Host.SetTheme(chosen)
 		}
 	})
 }
@@ -124,8 +78,7 @@ func (a *App) setOpacity(v float64, dragging bool) {
 	}
 }
 
-// instanceCard is one monitor's settings: the fields its plugin declares,
-// plus removing it.
+// instanceCard is one monitor's settings: the fields its plugin declares.
 func (a *App) instanceCard(c *ui.Context, p palette, in *app.Instance) {
 	m := in.Manifest()
 	drafts := a.draftsFor(in)
@@ -137,31 +90,6 @@ func (a *App) instanceCard(c *ui.Context, p palette, in *app.Instance) {
 				ui.Text(c, in.Name).FontSize(12).Bold().NoWrap()
 				ui.Text(c, m.Summary).FontSize(11).TextColor(p.TextMuted).Wrap()
 			})
-			confirming := a.confirmRemove == in.ID
-			buttonLabel := "移除"
-			if confirming {
-				buttonLabel = "确认移除"
-			}
-			ui.Row(c).Shrink(0).Children(func() {
-				if ui.Button(c, "").Label(buttonLabel).Tooltip("移除这个监控项").Children(func() {
-					ui.Text(c, buttonLabel).FontSize(11).SingleLine()
-				}).Clicked() {
-					if confirming {
-						a.confirmRemove = ""
-						a.Host.Remove(in.ID)
-						for key := range a.drafts {
-							if strings.HasPrefix(key, in.ID+"/") {
-								delete(a.drafts, key)
-							}
-						}
-						a.ensureSelection(a.Host.Instances())
-						a.SetSelected(a.Selected())
-						c.Toast("已移除 " + in.Name)
-					} else {
-						a.confirmRemove = in.ID
-					}
-				}
-			})
 		})
 
 		for _, def := range m.Settings {
@@ -170,9 +98,9 @@ func (a *App) instanceCard(c *ui.Context, p palette, in *app.Instance) {
 	})
 }
 
-// draftsFor gives each instance a scratch copy of its values, which the
-// text fields edit: a keystroke changes the draft, and the value is written
-// when the field loses the focus or when it is a number that parses.
+// draftsFor gives each instance a scratch copy of its values, which the text
+// fields edit: a keystroke changes the draft, and the value is written when the
+// field loses the focus or when it is a number that parses.
 func (a *App) draftsFor(in *app.Instance) map[string]string {
 	if a.drafts == nil {
 		a.drafts = map[string]string{}
@@ -310,106 +238,4 @@ const missingChoice = "未找到"
 func parsesNumber(s string) bool {
 	_, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 	return err == nil
-}
-
-// addCard offers every plugin the page could run that it does not run now: a
-// monitor the user removed comes back from here, with its settings as they
-// were.
-func (a *App) addCard(c *ui.Context, p palette) {
-	missing := a.missingPlugins()
-	if len(missing) == 0 {
-		return
-	}
-
-	card(c, p).Children(func() {
-		label(c, p, "添加")
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			names := make([]string, len(missing))
-			for i, pl := range missing {
-				names[i] = pl.Manifest().Name
-			}
-			chosen := names[0]
-			for i := range missing {
-				if a.addChoice == missing[i].Manifest().ID {
-					chosen = names[i]
-				}
-			}
-			if ui.Select(c, &chosen, names).Grow(1).Label("插件").Changed() {
-				a.addChoice = pluginIDNamed(missing, chosen)
-			}
-			if ui.Button(c, "").Label("添加监控项").Children(func() {
-				ui.Icon(c, iconPlus).FontSize(13)
-				ui.Text(c, "添加").FontSize(12).SingleLine()
-			}).Clicked() {
-				a.add(c, p, pluginIDNamed(missing, chosen))
-			}
-		})
-	})
-}
-
-// missingPlugins lists the plugins without an instance, in the order the tabs
-// would show them.
-func (a *App) missingPlugins() []plugin.Plugin {
-	running := map[string]bool{}
-	for _, in := range a.Host.Instances() {
-		running[in.PluginID] = true
-	}
-	var out []plugin.Plugin
-	for _, pl := range a.Host.Plugins() {
-		m := pl.Manifest()
-		if running[m.ID] {
-			continue
-		}
-		out = append(out, pl)
-	}
-	return out
-}
-
-// add starts a monitor again from the settings page. It comes back with the
-// settings it had: the host keeps those of a monitor the user removed.
-func (a *App) add(c *ui.Context, p palette, pluginID string) {
-	pl := a.Host.Plugin(pluginID)
-	if pl == nil {
-		return
-	}
-	m := pl.Manifest()
-	name := uniqueName(a.Host, m)
-	added := a.Host.Add(m.ID, name, nil)
-	if added == nil {
-		c.Toast("加不上 " + name)
-		return
-	}
-	a.addChoice = ""
-	a.SetSelected(added.ID)
-	c.Toast("已添加 " + added.Name)
-}
-
-// pluginIDNamed maps the label the select shows back to a plugin's ID.
-func pluginIDNamed(plugins []plugin.Plugin, name string) string {
-	for _, pl := range plugins {
-		if pl.Manifest().Name == name {
-			return pl.Manifest().ID
-		}
-	}
-	return ""
-}
-
-// uniqueName makes a name that no instance of the plugin uses yet.
-func uniqueName(h *app.Host, m plugin.Manifest) string {
-	base := m.DefaultInstance
-	used := map[string]bool{}
-	for _, in := range h.Instances() {
-		if in.PluginID == m.ID {
-			used[in.Name] = true
-		}
-	}
-	if !used[base] {
-		return base
-	}
-	for i := 2; ; i++ {
-		candidate := fmt.Sprintf("%s %d", base, i)
-		if !used[candidate] {
-			return candidate
-		}
-	}
 }

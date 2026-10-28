@@ -103,7 +103,7 @@ func TestReadingsCarryWhatTheCardNeeds(t *testing.T) {
 		text   string
 	}{
 		{"cpu", "2.24 GHz", "16 线程", ""},
-		{"gpu", "50°C", "RTX 3060 Laptop GPU", ""},
+		{"gpu", "RTX 3060 Laptop", "50°C", ""},
 		{"mem", "压力正常", "8 GB / 16 GB", ""},
 		{"disk", "C: · 512 GB", "已用 384 GB · 75%", ""},
 		{"net", "Wi-Fi", "上传 1 KB/s", "2 KB/s"},
@@ -126,6 +126,50 @@ func TestReadingsCarryWhatTheCardNeeds(t *testing.T) {
 		}
 		if r.Text != c.text {
 			t.Errorf("%s text is %q, want %q", c.id, r.Text, c.text)
+		}
+	}
+}
+
+// TestTheGpuCardNamesTheCardAndKeepsItsTemperatureShort checks what the GPU
+// card has room for now that the panel is one screen with small cards: the
+// model in the badge, the temperature in one short line, and nothing at all
+// where a sensor does not exist. The card's full driver name is neither.
+func TestTheGpuCardNamesTheCardAndKeepsItsTemperatureShort(t *testing.T) {
+	cases := []struct {
+		name   string
+		m      metrics
+		badge  string
+		detail string
+	}{
+		{"branded card with a sensor",
+			metrics{HasGPU: true, GPUName: "GeForce RTX 3060 Laptop GPU", HasGPUTemp: true, GPUTempC: 50.2},
+			"RTX 3060 Laptop", "50°C"},
+		{"card without a sensor",
+			metrics{HasGPU: true, GPUName: "Radeon RX 6800M"},
+			"RX 6800M", ""},
+		{"graphics nobody could name",
+			metrics{HasGPU: true, GPUName: gpuPlaceholderName},
+			"", ""},
+	}
+	for _, c := range cases {
+		r, ok := gpuReading(c.m)
+		if !ok {
+			t.Errorf("%s: no GPU reading", c.name)
+			continue
+		}
+		if r.Badge != c.badge {
+			t.Errorf("%s: badge is %q, want %q", c.name, r.Badge, c.badge)
+		}
+		if r.Detail != c.detail {
+			t.Errorf("%s: detail is %q, want %q", c.name, r.Detail, c.detail)
+		}
+		if len([]rune(r.Badge)) > gpuModelMax {
+			t.Errorf("%s: badge %q is longer than %d characters", c.name, r.Badge, gpuModelMax)
+		}
+		// The line under the number is one short value, never a sentence: the
+		// panel truncates it on one screen.
+		if len([]rune(r.Detail)) > 12 {
+			t.Errorf("%s: detail %q is a sentence", c.name, r.Detail)
 		}
 	}
 }

@@ -1,5 +1,5 @@
-// Package panel draws the SeeAll window: a title bar, the tabs that choose a
-// monitor, its page, and a status bar.
+// Package panel draws the SeeAll window: the machine's dashboard, and the
+// settings it opens.
 package panel
 
 import (

@@ -10,11 +10,8 @@ import (
 	"seeall/internal/core"
 )
 
-// fixture makes a host with its built-in instances, without polling.
-//
-// It pins the classic look: the tests below are about the layout the panel
-// had before the dashboard, and must go on measuring that layout rather than
-// whichever look the app opens with.
+// fixture makes a host with its built-in monitors, without polling: a machine
+// that reports the parts of a computer and a mouse beside it.
 func fixture(t *testing.T) (*app.Host, *App) {
 	t.Helper()
 	h := app.NewHost(t.TempDir())
@@ -23,120 +20,98 @@ func fixture(t *testing.T) (*app.Host, *App) {
 	}
 	h.Stop()
 	h.OnChange = func() {}
-	h.SetTheme(app.ThemeClassic)
-	h.Inject("mouse", core.Snapshot{Status: core.StatusOK, Title: "Rapoo Gaming Device",
-		Subtitle: "无线 · 72%", Primary: "battery", Readings: []core.Reading{
-			{ID: "battery", Label: "电量", Value: 72, Unit: core.UnitPercent, Severity: core.SeverityOK},
+	h.Inject("mouse", core.Snapshot{
+		Status: core.StatusOK, Title: "Rapoo Gaming Device",
+		Subtitle: "无线 · 72%", Primary: "battery",
+		Readings: []core.Reading{
+			{ID: "battery", Label: "电量", Value: 72, Unit: core.UnitPercent,
+				Severity: core.SeverityOK, Detail: "2 秒前"},
 			{ID: "link", Label: "连接", Text: "无线", Severity: core.SeverityOK},
-		}})
-	return h, New(h)
+			{ID: "dpi", Label: "DPI", Value: 1200, Severity: core.SeverityNone},
+		},
+	})
+	h.Inject("system", core.Snapshot{
+		Status: core.StatusOK, Title: "DESKTOP-4K1", Subtitle: "Windows 11 26H2",
+		Primary: "cpu", Health: 90, HealthNote: "很好",
+		Readings: []core.Reading{
+			{ID: "cpu", Label: "CPU", Value: 5, Unit: core.UnitPercent,
+				Severity: core.SeverityOK, Detail: "16 线程"},
+			{ID: "mem", Label: "内存", Value: 46, Unit: core.UnitPercent,
+				Severity: core.SeverityOK, Detail: "6.39 GB / 13.7 GB"},
+			{ID: "battery", Label: "电池", Value: 100, Unit: core.UnitPercent,
+				Severity: core.SeverityOK, Detail: "已充满"},
+		},
+	})
+	p := New(h)
+	p.SetSize(Fit(1920, 1040, 1))
+	return h, p
 }
 
-// TestSettingsStartsAtTheTop guards the bug the fixed-size panel had in the
-// old app: a page longer than the window must scroll, not push its own
-// content out of view. The tab row stays where it is above it.
-func TestSettingsStartsAtTheTop(t *testing.T) {
+// TestThePanelOpensOnTheMachine checks the panel's page is the machine's: its
+// score, its cards, and the way into the settings — with no title bar and no
+// tabs above them.
+func TestThePanelOpensOnTheMachine(t *testing.T) {
+	_, p := fixture(t)
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+
+	for _, want := range []string{"90", "很好", "CPU", "电池", "鼠标", "打开设置", "刷新"} {
+		if _, ok := tt.Find(want); !ok {
+			t.Errorf("the panel does not show %q: %v", want, tt.Texts())
+		}
+	}
+	for _, gone := range []string{"SeeAll", "本机"} {
+		if tt.HasText(gone) {
+			t.Errorf("the panel still draws the old title bar's %q: %v", gone, tt.Texts())
+		}
+	}
+}
+
+// TestTheSettingsPageStartsAtTheTop checks the settings page is drawn from the
+// top, under its own heading, rather than being pushed down the window.
+func TestTheSettingsPageStartsAtTheTop(t *testing.T) {
 	_, p := fixture(t)
 	p.SetSelected(SettingsPage)
 	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
 
-	tab, ok := tt.Find("鼠标")
+	back, ok := tt.Find("返回")
 	if !ok {
-		t.Fatalf("the tab row is missing: %v", tt.Texts())
+		t.Fatalf("the settings have no way back: %v", tt.Texts())
 	}
 	first, ok := tt.Find("应用")
 	if !ok {
 		t.Fatalf("the settings page is empty: %v", tt.Texts())
 	}
-	if first.Y <= tab.Y {
-		t.Fatalf("the settings content sits at y=%v, above the tabs at y=%v", first.Y, tab.Y)
+	if first.Y <= back.Y {
+		t.Errorf("the settings content at y=%v sits above the heading at y=%v", first.Y, back.Y)
 	}
-	// Directly under the tabs, not pushed to the middle or the foot by a
-	// page that is longer than the window.
 	if first.Y > float32(DesignHeight)/4 {
-		t.Fatalf("the settings content starts at y=%v, not under the tabs at y=%v", first.Y, tab.Y)
+		t.Errorf("the settings content starts at y=%v, not under the heading at y=%v",
+			first.Y, back.Y)
 	}
 
 	texts := strings.Join(tt.Texts(), " ")
 	if !strings.Contains(texts, "鼠标") {
-		t.Fatalf("the settings page lists no monitor: %s", texts)
+		t.Errorf("the settings page lists no monitor: %s", texts)
 	}
 }
 
-// TestMonitorPageLeadsWithItsReading checks the detail page leads with the
-// reading the plugin named, in the big value.
-func TestMonitorPageLeadsWithItsReading(t *testing.T) {
+// TestTheSettingsPageOnlyOffersSettings checks the page holds what the panel
+// can change — when to start, how solid it is, what each plugin watches — and
+// nothing else: monitors are not added, removed or notified about from here.
+func TestTheSettingsPageOnlyOffersSettings(t *testing.T) {
 	_, p := fixture(t)
-	p.SetSelected("mouse")
+	p.SetSelected(SettingsPage)
 	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+	texts := strings.Join(tt.Texts(), " ")
 
-	if !tt.HasText("72") {
-		t.Fatalf("the mouse page shows no level: %v", tt.Texts())
+	for _, want := range []string{"开机自启", "不透明度", "面板不透明度"} {
+		if !strings.Contains(texts, want) {
+			t.Errorf("the settings page has no %q: %s", want, texts)
+		}
 	}
-	if !tt.HasText("无线") {
-		t.Fatalf("the mouse page shows no link: %v", tt.Texts())
-	}
-}
-
-// TestTabsChooseThePage checks a click on a tab shows that monitor, and that
-// the tab row follows a page chosen from elsewhere, as the tray menu does.
-func TestTabsChooseThePage(t *testing.T) {
-	h, p := fixture(t)
-	if len(h.Instances()) < 2 {
-		t.Skip("needs at least two built-in monitors")
-	}
-	p.SetSelected("system")
-	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
-
-	// "鼠标" is the tab of the other monitor and the title of its page, so
-	// the click has one row to land on here: the page shows the system.
-	if err := tt.Click("鼠标"); err != nil {
-		t.Fatal(err)
-	}
-	if p.Selected() != "mouse" {
-		t.Fatalf("selected %q, want mouse", p.Selected())
-	}
-
-	if err := tt.Click("打开设置"); err != nil {
-		t.Fatal(err)
-	}
-	if p.Selected() != SettingsPage {
-		t.Fatalf("selected %q, want the settings", p.Selected())
-	}
-
-	// The settings leave the tab list's own choice where it was, so the tab
-	// of the monitor shown last must still bring its page back: a click is a
-	// click even when the tab already holds the choice.
-	if err := tt.Click("鼠标"); err != nil {
-		t.Fatal(err)
-	}
-	if p.Selected() != "mouse" {
-		t.Fatalf("selected %q after the settings, want mouse", p.Selected())
-	}
-
-	// The same for the other monitor, which is the tab that is not chosen.
-	if err := tt.Click("打开设置"); err != nil {
-		t.Fatal(err)
-	}
-	if err := tt.Click("本机"); err != nil {
-		t.Fatal(err)
-	}
-	if p.Selected() != "system" {
-		t.Fatalf("selected %q after the settings, want system", p.Selected())
-	}
-
-	// Chosen from the tray menu, the tabs must point at the page shown.
-	p.SetSelected("system")
-	tt2 := ui.NewTester(p.View, DesignWidth, DesignHeight)
-	tab, ok := tt2.Find("本机")
-	if !ok {
-		t.Fatalf("the system tab is missing: %v", tt2.Texts())
-	}
-	body, ok := tt2.Find("CPU")
-	if !ok {
-		t.Fatalf("the system page is missing: %v", tt2.Texts())
-	}
-	if body.Y <= tab.Y {
-		t.Fatalf("the system page sits above the tabs: y=%v, tabs at %v", body.Y, tab.Y)
+	for _, gone := range []string{"通知", "主题", "移除", "添加"} {
+		if strings.Contains(texts, gone) {
+			t.Errorf("the settings page still offers %q: %s", gone, texts)
+		}
 	}
 }

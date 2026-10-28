@@ -78,10 +78,13 @@ func gpuReading(m metrics) (core.Reading, bool) {
 	case m.HasGPU:
 		r := core.Reading{
 			ID: "gpu", Label: "GPU", Value: m.GPUPercent, Unit: core.UnitPercent,
-			Severity: loadSeverity(m.GPUPercent), Detail: m.GPUName,
+			Severity: loadSeverity(m.GPUPercent),
+			// The badge names the card, since the title only says "GPU"; its
+			// temperature is the one number worth the line of small print.
+			Badge: gpuModel(m.GPUName),
 		}
 		if m.HasGPUTemp {
-			r.Badge = tempText(m.GPUTempC)
+			r.Detail = tempText(m.GPUTempC)
 		}
 		return r, true
 	case m.GPUProblem != "":

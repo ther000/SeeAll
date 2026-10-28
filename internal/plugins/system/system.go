@@ -4,7 +4,6 @@
 package system
 
 import (
-	"fmt"
 	"time"
 
 	"seeall/internal/core"
@@ -26,7 +25,6 @@ func Manifest() plugin.Manifest {
 			{Key: "gpu", Label: "GPU", Type: plugin.SettingChoice, Default: gpuAuto,
 				OptionsFor:  gpuChoices,
 				Description: "只统计这一张"},
-			{Key: "notify", Label: "电池提醒", Type: plugin.SettingBool, Default: "true"},
 		},
 	}
 }
@@ -41,11 +39,10 @@ func (Plugin) Manifest() plugin.Manifest { return Manifest() }
 func (Plugin) New(env *plugin.Env) plugin.Instance { return &instance{env: env} }
 
 type instance struct {
-	env      *plugin.Env
-	sampler  sampler
-	started  bool
-	quit     chan struct{}
-	notified bool
+	env     *plugin.Env
+	sampler sampler
+	started bool
+	quit    chan struct{}
 	// problem is the last thing written to the log, so that a condition that
 	// lasts does not repeat itself on every sample.
 	problem string
@@ -121,14 +118,6 @@ func (in *instance) collect() {
 		status = core.StatusWarn
 	}
 
-	if m.HasBattery {
-		if m.BatteryPercent <= 10 && !m.Charging {
-			in.notifyBattery(m.BatteryPercent)
-		} else if m.BatteryPercent > 20 || m.Charging {
-			in.notified = false
-		}
-	}
-
 	// The dashboard leads with one number and a word for it; the page's cards
 	// say the same thing in more detail underneath.
 	health, note := healthOf(m)
@@ -144,12 +133,4 @@ func (in *instance) collect() {
 		Facts:      facts(m),
 		Processes:  topProcesses(m.Processes, processCount),
 	})
-}
-
-func (in *instance) notifyBattery(level float64) {
-	if in.notified || !in.env.Settings().Bool("notify", true) {
-		return
-	}
-	in.notified = true
-	in.env.Notify("电量低", fmt.Sprintf("这台电脑只剩 %s，插上电源。", core.FormatNumber(level)+"%"))
 }

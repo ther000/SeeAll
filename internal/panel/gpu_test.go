@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -102,19 +103,20 @@ func TestSettingsChooseTheGPU(t *testing.T) {
 		t.Errorf("the setting is %q after choosing %q, want %q", got, other.Label, other.Value)
 	}
 
-	// And the page it drives is about that card.
+	// And the reading that setting drives is about that card: the plugin names
+	// it in the reading, the panel only shows it.
 	h.RefreshOne("system")
-	var detail string
+	var named string
 	for _, r := range in.Snapshot().Readings {
 		if r.ID == "gpu" {
-			detail = r.Detail
+			named = r.Badge + r.Detail
 		}
 	}
-	if detail == "" {
+	if named == "" {
 		t.Fatalf("the system page shows no GPU reading: %v", in.Snapshot().Readings)
 	}
-	if detail != cardName(cards, other.Value) {
-		t.Errorf("the GPU reading is about %q, want %q", detail, cardName(cards, other.Value))
+	if want := cardName(cards, other.Value); !strings.Contains(named, want) && !strings.Contains(want, named) {
+		t.Errorf("the GPU reading is about %q, want %q", named, want)
 	}
 }
 
@@ -133,7 +135,7 @@ func TestAChoiceNeedsSomethingToChoose(t *testing.T) {
 			OptionsFor: func() []plugin.Option { return options },
 		}
 		return ui.NewTester(func(c *ui.Context) {
-			p.settingField(c, paletteFor(c), in, def, map[string]string{"gpu": options[0].Value})
+			p.settingField(c, dashFor(c).palette(), in, def, map[string]string{"gpu": options[0].Value})
 		}, DesignWidth, 160)
 	}
 
@@ -168,7 +170,7 @@ func TestAMissingChoiceStaysVisible(t *testing.T) {
 	}
 	p.drafts = nil
 	tt := ui.NewTester(func(c *ui.Context) {
-		p.settingField(c, paletteFor(c), in, def, p.draftsFor(in))
+		p.settingField(c, dashFor(c).palette(), in, def, p.draftsFor(in))
 	}, DesignWidth, 160)
 	if !tt.HasText(missingChoice) {
 		t.Fatalf("the row lost the card it was on: %v", tt.Texts())

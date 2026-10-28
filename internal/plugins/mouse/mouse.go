@@ -30,7 +30,6 @@ func Manifest() plugin.Manifest {
 				Placeholder: "24AE",
 				Description: "雷柏是 24AE，换别的品牌就填它的 VID（十六进制）",
 			},
-			{Key: "notify", Label: "低电量提醒", Type: plugin.SettingBool, Default: "true"},
 		},
 	}
 }
@@ -58,7 +57,6 @@ type instance struct {
 	hasFrame bool
 	lastAt   time.Time
 	problem  string
-	notified bool
 	started  bool
 	quit     chan struct{}
 	wg       sync.WaitGroup
@@ -340,29 +338,4 @@ func (in *instance) publish() {
 		{Label: "DPI", Value: core.FormatNumber(float64(frame.DPI))},
 	}
 	in.env.Publish(snap)
-	in.maybeNotify(frame.Battery, stale)
-}
-
-// maybeNotify posts one notification per charge cycle when the battery falls
-// to 15%.
-func (in *instance) maybeNotify(level int, stale bool) {
-	if !in.env.Settings().Bool("notify", true) || stale {
-		return
-	}
-	in.mu.Lock()
-	notified := in.notified
-	in.mu.Unlock()
-
-	if level <= 15 && !notified {
-		in.mu.Lock()
-		in.notified = true
-		in.mu.Unlock()
-		in.env.Notify("鼠标电量低", fmt.Sprintf("只剩 %d%%，该充电了。", level))
-		return
-	}
-	if level > 20 && notified {
-		in.mu.Lock()
-		in.notified = false
-		in.mu.Unlock()
-	}
 }

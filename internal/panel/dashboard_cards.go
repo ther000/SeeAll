@@ -196,6 +196,14 @@ func drawDashChart(pt *ui.Painter, r ui.Rect, d dash, reading core.Reading, hist
 	case "temp":
 		drawBar(pt, r, d.track, clamp01(reading.Value/100), d.teal)
 		return
+	case "battery":
+		// A charge is a level, not a series: it sits at 100% for hours and
+		// then falls off a cliff, so a line of it is a dashed nothing while
+		// the bar says at a glance how much is left. This is the machine's
+		// battery and a device's — a mouse reports its charge as "battery"
+		// too.
+		drawBar(pt, r, d.track, clamp01(reading.Value/100), color)
+		return
 	case "mem":
 		// Memory is a share of the whole, and what the area says is how
 		// close to full it has been: the highest value of the window is the
@@ -329,4 +337,40 @@ func drawDashed(pt *ui.Painter, r ui.Rect, color ui.Color) {
 		w := min32(dash, r.X+r.W-x)
 		pt.Fill(ui.Rect{X: x, Y: y - width/2, W: w, H: width}, color, width/2)
 	}
+}
+
+// clamp01 keeps a fraction between nothing and all of it.
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+// varies reports whether a history is worth drawing as a shape: enough points,
+// and something other than a flat line.
+func varies(values []float64) bool {
+	if len(values) < 4 {
+		return false
+	}
+	lo, hi := values[0], values[0]
+	for _, v := range values {
+		if v < lo {
+			lo = v
+		}
+		if v > hi {
+			hi = v
+		}
+	}
+	return hi-lo > 1e-9
+}
+
+func min32(a, b float32) float32 {
+	if a < b {
+		return a
+	}
+	return b
 }

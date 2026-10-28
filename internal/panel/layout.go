@@ -2,14 +2,17 @@ package panel
 
 import "math"
 
-// The panel is one column of a fixed shape: a title bar, a row of tabs that
-// choose the monitor, the page, and a status bar at the foot.
+// The panel is one column of a fixed shape: the machine's health and its parts
+// at the top, the cards under them, and nothing else — no title bar, no tabs,
+// no status strip. Its height is the room that shape needs to be read at once,
+// without a scroll bar.
 const (
 	// DesignWidth and DesignHeight are the panel's size in physical pixels,
 	// the unit a design is drawn in. A window is sized in DIPs, so the panel
-	// converts them with the display's scale: 660×840 is 440×560 DIPs at
-	// 150%, and the same 660×840 pixels on screen.
-	DesignWidth, DesignHeight = 660, 840
+	// converts them with the display's scale: 660×1110 is 440×740 DIPs at
+	// 150%, and the same 660×1110 pixels on screen — tall enough that the
+	// whole dashboard fits a 150% display without scrolling.
+	DesignWidth, DesignHeight = 660, 1110
 	// MarginPixels is the room the panel keeps from the screen edge and the
 	// taskbar, also in physical pixels.
 	MarginPixels = 8
@@ -25,8 +28,8 @@ type Metrics struct {
 // given scale: the design's pixel size in that scale, shrunk evenly when the
 // room is smaller.
 //
-// The size is worked out once and kept: switching tabs or reopening the panel
-// does not resize it, and a page longer than it scrolls.
+// The size is worked out once and kept: reopening the panel or opening the
+// settings does not resize it, and a page longer than it scrolls.
 func Fit(availWidth, availHeight int, scale float64) Metrics {
 	if scale <= 0 {
 		scale = 1

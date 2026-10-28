@@ -64,9 +64,6 @@ type Manifest struct {
 	Icon string
 	// Settings are the fields the settings page offers for an instance.
 	Settings []Setting
-	// Multiple lets a plugin have several instances, one per thing it
-	// watches. Without it, the app keeps a single instance.
-	Multiple bool
 	// DefaultInstance is the name of the instance every install starts
 	// with: "鼠标", "本机".
 	DefaultInstance string
@@ -111,7 +108,6 @@ type Env struct {
 	mu     sync.RWMutex
 	snap   core.Snapshot
 	logf   func(string, ...any)
-	notify func(title, body string)
 	onSnap func(instanceID string, snap core.Snapshot)
 }
 
@@ -122,7 +118,6 @@ func NewEnv(instanceID string, m Manifest, settings *Settings) *Env {
 		manifest:   m,
 		settings:   settings,
 		logf:       func(string, ...any) {},
-		notify:     func(string, string) {},
 		onSnap:     func(string, core.Snapshot) {},
 	}
 }
@@ -135,9 +130,6 @@ func (e *Env) Settings() *Settings { return e.settings }
 
 // Logf writes a line to SeeAll's log.
 func (e *Env) Logf(format string, args ...any) { e.logf(format, args...) }
-
-// Notify posts a system notification, if the user allows them.
-func (e *Env) Notify(title, body string) { e.notify(title, body) }
 
 // Publish replaces the instance's snapshot and repaints the panel. It is
 // safe from any goroutine and is what a plugin's polling loop calls.
@@ -165,13 +157,6 @@ func (e *Env) Snapshot() core.Snapshot {
 func (e *Env) SetLog(fn func(string, ...any)) {
 	if fn != nil {
 		e.logf = fn
-	}
-}
-
-// SetNotify sets what Notify posts.
-func (e *Env) SetNotify(fn func(title, body string)) {
-	if fn != nil {
-		e.notify = fn
 	}
 }
 

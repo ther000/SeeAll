@@ -302,7 +302,7 @@ func (s *sampler) sampleGPU(m *metrics, card gpuAdapter, found bool, gpuKey stri
 	if m.GPUName == "" {
 		// No card could be enumerated: the counters are still there, and the
 		// machine's graphics are worth showing without naming them.
-		m.GPUName = "显卡"
+		m.GPUName = gpuPlaceholderName
 	}
 
 	// The engines of a graphics processor each report their own utilization,

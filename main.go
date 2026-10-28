@@ -95,12 +95,6 @@ func (s *state) ready() {
 	if err := s.host.Load(); err != nil {
 		log.Printf("读取设置失败：%v", err)
 	}
-	s.host.OnNotify = func(title, body string) {
-		n := mygo.NewNotification(mygo.NotificationOptions{Title: title, Body: body})
-		if err := n.Show(); err != nil {
-			log.Printf("通知失败：%v", err)
-		}
-	}
 	s.host.OnChange = s.refresh
 	// The panel was made before the settings file was read, so how solid it
 	// should be is only known now.

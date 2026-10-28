@@ -44,43 +44,38 @@ func main() {
 		panel.MarginDIP(displayScale))
 	fitted := panel.Fit(area.Width, area.Height, displayScale)
 
-	// The dashboard is one page for the machine and the devices beside it —
-	// its score, its cards, the mouse's card, the battery and the programs it
-	// runs — and that page is composed for the design's own canvas. The
-	// classic pages are the panel as it opens on this display.
+	// The panel has two pages: the machine's dashboard and the settings. Both
+	// are drawn at the size this display gives the panel — 440×740 DIPs — and
+	// the scale is pixels per design pixel, so a shot is 1320×2220 at -scale 2
+	// whichever page it shows.
+	//
+	// Drawing the view at 660×1110 DIPs instead would show a 100% display,
+	// where the panel keeps the design's pixels but draws its page in DIPs:
+	// that panel is a good deal taller than its dashboard, and the shot would
+	// be a third empty.
+	shotScale := float32(*scale) * float32(displayScale)
 	shots := []struct {
-		name  string
-		row   string
-		theme string
-		// design draws the page at the panel's design size rather than at the
-		// size this display gives it.
-		design bool
+		name string
+		row  string
 	}{
-		// No row: the dashboard opens on the machine's page, which is one page
-		// whichever monitor the app remembers.
-		{"panel-dashboard", "", app.ThemeDashboard, true},
-		{"panel-dashboard-settings", panel.SettingsPage, app.ThemeDashboard, true},
-		{"panel-mouse", "mouse", app.ThemeClassic, false},
-		{"panel-system", "system", app.ThemeClassic, false},
-		{"panel-settings", panel.SettingsPage, app.ThemeClassic, false},
+		// No row: the dashboard is one page whichever monitor the app
+		// remembers.
+		{"panel-dashboard", ""},
+		{"panel-dashboard-settings", panel.SettingsPage},
 	}
 	for _, shot := range shots {
-		_, p := fixture(fitted, shot.theme)
+		_, p := fixture(fitted)
 		if shot.row != "" {
 			p.SetSelected(shot.row)
 		}
 		w, h := fitted.Width, fitted.Height
-		if *width != 0 || *height != 0 {
-			if *width != 0 {
-				w = *width
-			}
-			if *height != 0 {
-				h = *height
-			}
-		} else if shot.design {
-			w, h = panel.DesignWidth, panel.DesignHeight
+		if *width != 0 {
+			w = *width
 		}
-		img := ui.Render(p.View, w, h, float32(*scale))
+		if *height != 0 {
+			h = *height
+		}
+		img := ui.Render(p.View, w, h, shotScale)
 		path := filepath.Join(*out, shot.name+".png")
 		f, err := os.Create(path)
 		if err != nil {
@@ -95,10 +90,9 @@ func main() {
 	}
 }
 
-// fixture builds a host with the built-in plugins, in the given look, and
-// fills it with the data a real machine would show, so the preview is
-// deterministic.
-func fixture(size panel.Metrics, theme string) (*app.Host, *panel.App) {
+// fixture builds a host with the built-in plugins and fills it with the data a
+// real machine and its mouse would show, so the preview is deterministic.
+func fixture(size panel.Metrics) (*app.Host, *panel.App) {
 	dir, err := os.MkdirTemp("", "seeall-preview")
 	if err != nil {
 		log.Fatal(err)
@@ -110,7 +104,6 @@ func fixture(size panel.Metrics, theme string) (*app.Host, *panel.App) {
 	// Stop the plugins' own polling: the preview shows what it injects.
 	host.Stop()
 	host.OnChange = func() {}
-	host.SetTheme(theme)
 	host.ClearHistory()
 
 	now := time.Now()
@@ -126,11 +119,6 @@ func fixture(size panel.Metrics, theme string) (*app.Host, *panel.App) {
 	inject("mouse", core.Snapshot{
 		At: now.Add(-2 * time.Second), Status: core.StatusOK,
 		Title: "Rapoo Gaming Device", Subtitle: "无线 · 72%", Primary: "battery",
-		Health: 72, HealthNote: "电量充足",
-		Facts: []core.Fact{
-			{Label: "连接", Value: "无线"},
-			{Label: "DPI", Value: "1200"},
-		},
 		Readings: []core.Reading{
 			{ID: "battery", Label: "电量", Value: 72, Unit: core.UnitPercent,
 				Severity: core.SeverityOK, Detail: "2 秒前"},
@@ -140,8 +128,8 @@ func fixture(size panel.Metrics, theme string) (*app.Host, *panel.App) {
 	}, map[string][]float64{"battery": wave(72, 40, 8, 3)})
 
 	// The machine, as the dashboard describes it: a score, the four facts
-	// across the top, the six parts of it, and the programs behind the
-	// numbers.
+	// across the top, the six parts of it, the battery, and the programs
+	// behind the numbers.
 	inject("system", core.Snapshot{
 		At: now.Add(-1 * time.Second), Status: core.StatusOK,
 		Title: "DESKTOP-4K1", Subtitle: "Windows 11 26H2 · windows/amd64", Primary: "cpu",
@@ -163,7 +151,7 @@ func fixture(size panel.Metrics, theme string) (*app.Host, *panel.App) {
 			{ID: "cpu", Label: "CPU", Value: 5, Unit: core.UnitPercent,
 				Severity: core.SeverityOK, Badge: "2.24 GHz", Detail: "16 线程"},
 			{ID: "gpu", Label: "GPU", Value: 4, Unit: core.UnitPercent,
-				Severity: core.SeverityOK, Badge: "50°C", Detail: "GeForce RTX 3060 Laptop GPU"},
+				Severity: core.SeverityOK, Badge: "RTX 3060", Detail: "50°C · 2.1 / 5.9 GB"},
 			{ID: "mem", Label: "内存", Value: 46, Unit: core.UnitPercent,
 				Severity: core.SeverityOK, Badge: "压力正常", Detail: "6.39 GB / 13.7 GB"},
 			{ID: "disk", Label: "可用空间", Value: 63 * 1024 * 1024 * 1024, Unit: core.UnitBytes,
@@ -180,10 +168,11 @@ func fixture(size panel.Metrics, theme string) (*app.Host, *panel.App) {
 		},
 	}, map[string][]float64{
 		// A processor at rest draws a dashed line, a busy one a shape.
-		"cpu": flat(5, 60),
-		"gpu": wave(4, 60, 3, 4),
-		"mem": wave(46, 60, 3, 11),
-		"net": {900, 1400, 3000, 9000, 22000, 41000, 52000},
+		"cpu":     flat(5, 60),
+		"gpu":     wave(4, 60, 3, 4),
+		"mem":     wave(46, 60, 3, 11),
+		"net":     {900, 1400, 3000, 9000, 22000, 41000, 52000},
+		"battery": flat(100, 60),
 	})
 
 	p := panel.New(host)

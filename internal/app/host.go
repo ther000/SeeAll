@@ -71,9 +71,6 @@ type Host struct {
 	// OnChange runs after a snapshot or a setting changes, on the goroutine
 	// that changed it. The UI sets it to repaint.
 	OnChange func()
-	// OnNotify posts a system notification; the app sets it once it is
-	// ready, because notifications need the desktop.
-	OnNotify func(title, body string)
 	// Logf writes a line to the log file.
 	Logf func(format string, args ...any)
 }
@@ -85,7 +82,6 @@ func NewHost(dir string) *Host {
 		byID:      map[string]*Instance{},
 		storePath: filepath.Join(dir, "seeall.json"),
 		OnChange:  func() {},
-		OnNotify:  func(string, string) {},
 		Logf:      func(string, ...any) {},
 	}
 	h.plugins = Builtin()
@@ -129,8 +125,10 @@ func (h *Host) Instance(id string) *Instance {
 	return h.byID[id]
 }
 
-// Load reads the settings file and starts every instance in it, or the
-// plugins' default instances on a machine that has none yet.
+// Load reads the settings file and starts every plugin. There is nothing to
+// add and nothing to remove: the panel always shows everything the app can
+// watch, so the file carries the settings each plugin was given rather than a
+// list of which ones to run.
 func (h *Host) Load() error {
 	state, err := h.readState()
 	if err != nil {
@@ -140,68 +138,39 @@ func (h *Host) Load() error {
 	h.saved = state
 	h.mu.Unlock()
 
-	// A file that was written but holds no instance is a user who removed
-	// them all, and their choice stands across a restart. Only a machine that
-	// never ran SeeAll — no file, so no version — starts with every plugin's
-	// default monitor.
-	if state.Version == 0 {
-		for _, p := range h.Plugins() {
-			m := p.Manifest()
-			h.Add(m.ID, m.DefaultInstance, nil)
-		}
-	} else {
-		for _, saved := range state.Instances {
-			p := h.Plugin(saved.PluginID)
-			if p == nil {
-				continue
-			}
-			h.Add(saved.PluginID, saved.Name, saved.Settings)
+	for _, p := range h.Plugins() {
+		m := p.Manifest()
+		h.start(p, m.DefaultInstance, settingsOf(state, m.ID))
+	}
+	return nil
+}
+
+// settingsOf returns the settings a plugin was saved with, or nil for one the
+// file has never seen.
+func settingsOf(state fileState, pluginID string) map[string]string {
+	for _, saved := range state.Instances {
+		if saved.PluginID == pluginID {
+			return saved.Settings
 		}
 	}
 	return nil
 }
 
-// Add makes and starts an instance.
-//
-// A plugin the user removed earlier comes back with the settings it had: nil
-// values take those the host saved when the monitor went away, so that
-// removing one is not a way to forget how it was set up.
-func (h *Host) Add(pluginID, name string, values map[string]string) *Instance {
-	p := h.Plugin(pluginID)
-	if p == nil {
-		return nil
-	}
+// start makes and runs one plugin's instance. There is one per plugin: a
+// monitor is part of the app rather than something the user arranges, so its
+// name comes from the manifest and its settings from the file.
+func (h *Host) start(p plugin.Plugin, name string, values map[string]string) *Instance {
 	m := p.Manifest()
 	if name == "" {
 		name = m.DefaultInstance
 	}
-	restoring := false
-	if values == nil {
-		h.mu.RLock()
-		values = h.saved.Removed[pluginID]
-		restoring = values != nil
-		h.mu.RUnlock()
-	}
-	id := m.ID
-	if m.Multiple {
-		id = m.ID + ":" + strings.TrimSpace(name)
-	}
-
-	h.mu.RLock()
-	if _, exists := h.byID[id]; exists {
-		h.mu.RUnlock()
-		return nil
-	}
-	h.mu.RUnlock()
-
 	settings := plugin.NewSettings(m.Settings)
 	if values != nil {
 		settings.Load(values)
 	}
-	env := plugin.NewEnv(id, m, settings)
-	in := &Instance{ID: id, PluginID: m.ID, Name: name, Env: env, history: map[string]*core.Ring{}}
+	env := plugin.NewEnv(m.ID, m, settings)
+	in := &Instance{ID: m.ID, PluginID: m.ID, Name: name, Env: env, history: map[string]*core.Ring{}}
 	env.SetLog(h.Logf)
-	env.SetNotify(h.notifyInstance)
 	env.SetPublishHook(h.storeSnapshot)
 	in.monitor = p.New(env)
 	env.Settings().OnChange(func(key, value string) {
@@ -214,12 +183,7 @@ func (h *Host) Add(pluginID, name string, values map[string]string) *Instance {
 
 	h.mu.Lock()
 	h.instances = append(h.instances, in)
-	h.byID[id] = in
-	// The monitor runs again, so the settings kept for it are no longer
-	// waiting to be restored.
-	if restoring {
-		delete(h.saved.Removed, pluginID)
-	}
+	h.byID[m.ID] = in
 	h.mu.Unlock()
 
 	if in.monitor != nil {
@@ -228,41 +192,6 @@ func (h *Host) Add(pluginID, name string, values map[string]string) *Instance {
 	h.save()
 	h.OnChange()
 	return in
-}
-
-// Remove stops an instance and forgets it.
-func (h *Host) Remove(id string) {
-	h.mu.Lock()
-	in := h.byID[id]
-	if in == nil {
-		h.mu.Unlock()
-		return
-	}
-	delete(h.byID, id)
-	for i, candidate := range h.instances {
-		if candidate == in {
-			h.instances = append(h.instances[:i], h.instances[i+1:]...)
-			break
-		}
-	}
-	// Its cards are gone with it, so an order for them arranges nothing: a
-	// monitor removed and added back starts from the plugin's own order.
-	delete(h.saved.Order, id)
-	// Keep how it was set up, so that adding it back restores the monitor
-	// rather than a fresh one.
-	if len(in.Manifest().Settings) > 0 {
-		if h.saved.Removed == nil {
-			h.saved.Removed = map[string]map[string]string{}
-		}
-		h.saved.Removed[in.PluginID] = in.Settings().All()
-	}
-	h.mu.Unlock()
-
-	if in.monitor != nil {
-		in.monitor.Stop()
-	}
-	h.save()
-	h.OnChange()
 }
 
 // Refresh asks every instance for a snapshot now.
@@ -320,42 +249,6 @@ func (h *Host) storeSnapshot(instanceID string, snap core.Snapshot) {
 	h.OnChange()
 }
 
-// Notifications reports whether the app may post system notifications. It is
-// the switch the settings page shows, over the per-monitor ones: a monitor's
-// own "提醒" setting says when it would notify, this says whether anything may
-// appear at all.
-func (h *Host) Notifications() bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if h.saved.UI.Notify == nil {
-		return true
-	}
-	return *h.saved.UI.Notify
-}
-
-// SetNotifications remembers whether notifications may be posted.
-func (h *Host) SetNotifications(on bool) {
-	h.mu.Lock()
-	if h.saved.UI.Notify != nil && *h.saved.UI.Notify == on {
-		h.mu.Unlock()
-		return
-	}
-	h.saved.UI.Notify = &on
-	h.mu.Unlock()
-	h.save()
-	h.OnChange()
-}
-
-// Notify posts a system notification, unless the user turned them off.
-func (h *Host) Notify(title, body string) {
-	if !h.Notifications() {
-		return
-	}
-	h.OnNotify(title, body)
-}
-
-func (h *Host) notifyInstance(title, body string) { h.Notify(title, body) }
-
 // now is time.Now, replaceable by tests.
 var now = time.Now
 
@@ -365,13 +258,6 @@ type fileState struct {
 	Version   int          `json:"version"`
 	Instances []savedEntry `json:"instances"`
 	UI        savedUI      `json:"ui"`
-	// Removed holds the settings of the monitors the user took away, by
-	// plugin: adding one back goes through Add, which reads them.
-	Removed map[string]map[string]string `json:"removed,omitempty"`
-	// Order holds the order a page's cards were dragged into, by instance:
-	// the reading IDs as the user arranged them. A reading a plugin stops
-	// reporting is simply absent, and one it starts reporting is appended.
-	Order map[string][]string `json:"order,omitempty"`
 }
 
 type savedEntry struct {
@@ -386,12 +272,6 @@ type savedUI struct {
 	// Opacity is how solid the panel is, from MinPanelOpacity to 1; nil on a
 	// file written before the slider existed, which means opaque.
 	Opacity *float64 `json:"opacity,omitempty"`
-	// Notify is the master switch for system notifications; nil on a file
-	// written before it existed, which means on.
-	Notify *bool `json:"notify,omitempty"`
-	// Theme is the look the panel draws: ThemeDashboard or ThemeClassic. Nil
-	// on a file written before there was a choice, which means the dashboard.
-	Theme *string `json:"theme,omitempty"`
 }
 
 func (h *Host) readState() (fileState, error) {
@@ -481,8 +361,6 @@ func (h *Host) save() {
 	state := fileState{Version: 1}
 	h.mu.RLock()
 	state.UI = h.saved.UI
-	state.Removed = h.saved.Removed
-	state.Order = h.saved.Order
 	for _, in := range h.instances {
 		state.Instances = append(state.Instances, savedEntry{
 			PluginID: in.PluginID,
@@ -574,26 +452,6 @@ func (h *Host) LastInstance() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.saved.UI.LastInstance
-}
-
-// CardOrder returns the order the cards of an instance's page were dragged
-// into: reading IDs, most wanted first. An instance the user has not arranged
-// has none, and its page keeps the plugin's own order.
-func (h *Host) CardOrder(instanceID string) []string {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return append([]string(nil), h.saved.Order[instanceID]...)
-}
-
-// SetCardOrder remembers the order of an instance's cards.
-func (h *Host) SetCardOrder(instanceID string, order []string) {
-	h.mu.Lock()
-	if h.saved.Order == nil {
-		h.saved.Order = map[string][]string{}
-	}
-	h.saved.Order[instanceID] = append([]string(nil), order...)
-	h.mu.Unlock()
-	h.save()
 }
 
 // SetLastInstance remembers which instance the panel showed.
