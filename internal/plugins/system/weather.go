@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,10 @@ const (
 	// weather rather than flicker back to the score.
 	weatherStale = 3 * weatherRefresh
 )
+
+// autoCity is what an empty city means, in the word the setting's placeholder
+// shows it with.
+const autoCity = "自动"
 
 // skyState is what the monitor knows about the weather: the last report,
 // whether it has one, and why the last question failed.
@@ -69,7 +74,25 @@ func (in *instance) fetchSky() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), weatherTimeout)
 	defer cancel()
-	report, err := client.Fetch(ctx)
+
+	// A city the user named wins over the address service, and needs no
+	// network guess at all — it is the answer a proxy cannot move. The setting
+	// is read on every fetch rather than kept, so that changing it takes
+	// effect on the refresh the settings page already asks for.
+	//
+	// The field's placeholder says 自动, so a user may type it; the geocoder
+	// would then look for a city of that name.
+	city := strings.TrimSpace(in.env.Settings().Get("city"))
+	if city == autoCity || strings.EqualFold(city, "auto") {
+		city = ""
+	}
+	var report weather.Report
+	var err error
+	if city != "" {
+		report, err = client.FetchCity(ctx, city)
+	} else {
+		report, err = client.Fetch(ctx)
+	}
 
 	in.sky.mu.Lock()
 	defer in.sky.mu.Unlock()

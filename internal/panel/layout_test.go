@@ -109,7 +109,7 @@ func TestTheSettingsPageOnlyOffersSettings(t *testing.T) {
 	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
 	texts := strings.Join(tt.Texts(), " ")
 
-	for _, want := range []string{"开机自启", "不透明度", "面板不透明度"} {
+	for _, want := range []string{"开机自启", "不透明度", "面板不透明度", "城市", "留空按 IP 定位"} {
 		if !strings.Contains(texts, want) {
 			t.Errorf("the settings page has no %q: %s", want, texts)
 		}

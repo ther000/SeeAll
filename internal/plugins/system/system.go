@@ -20,6 +20,14 @@ func Manifest() plugin.Manifest {
 		Icon:            "cpu",
 		DefaultInstance: "本机",
 		Settings: []plugin.Setting{
+			// The city is the one weather answer a proxy cannot move: a
+			// machine whose traffic leaves through another country is given
+			// that country's weather, and only the user knows better. Empty
+			// means "ask the address service", which is right for most
+			// machines and needs no setting made.
+			{Key: "city", Label: "城市", Type: plugin.SettingText, Default: "",
+				Placeholder: "自动",
+				Description: "留空按 IP 定位，填城市名就固定用它（如 重庆）"},
 			// The list is filled in when the page is drawn: which cards a
 			// machine has is not known until it is running.
 			{Key: "gpu", Label: "GPU", Type: plugin.SettingChoice, Default: gpuAuto,

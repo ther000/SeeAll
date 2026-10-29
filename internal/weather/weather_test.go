@@ -46,7 +46,7 @@ func newSky(t *testing.T, fail ...string) *sky {
 		case "/who":
 			w.Write([]byte(`{"success":true,"city":"Hong Kong","latitude":22.31,"longitude":114.17}`))
 		case "/geo":
-			w.Write([]byte(`{"results":[{"latitude":29.56026,"longitude":106.55771}]}`))
+			w.Write([]byte(`{"results":[{"name":"重庆","latitude":29.56026,"longitude":106.55771}]}`))
 		case "/sky":
 			w.Write([]byte(`{"current":{"temperature_2m":17.6,"weather_code":3}}`))
 		default:
@@ -120,6 +120,59 @@ func TestTheLocationServicesAreAskedInOrder(t *testing.T) {
 			t.Errorf("the city's coordinates were asked for after no city was named: %v",
 				s.pathsAsked())
 		}
+	}
+}
+
+// TestAManualCityNeedsNoAddressService checks the setting's promise: a machine
+// whose traffic leaves through a proxy in another country can still be told
+// what the sky is doing where it actually is, because the city the user named
+// is not something a proxy can move.
+func TestAManualCityNeedsNoAddressService(t *testing.T) {
+	s := newSky(t, "/ip", "/who")
+	report, err := s.client().FetchCity(context.Background(), "重庆")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Place != "重庆" || report.TempC != 17.6 {
+		t.Errorf("the named city read %q %v°C, want 重庆 17.6°C", report.Place, report.TempC)
+	}
+	for _, path := range s.pathsAsked() {
+		if path == "/ip" || path == "/who" {
+			t.Errorf("a city the user named still asked where the machine is: %v",
+				s.pathsAsked())
+		}
+	}
+}
+
+// TestTheGeocoderNamesTheCity checks the header says the city the geocoder
+// knows rather than the letters the user typed: what a person types may be a
+// name only a geocoder can read.
+func TestTheGeocoderNamesTheCity(t *testing.T) {
+	s := newSky(t)
+	report, err := s.client().FetchCity(context.Background(), "chongqing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Place != "重庆" {
+		t.Errorf("typing chongqing put %q on the page, want 重庆", report.Place)
+	}
+}
+
+// TestACityNoOneKnowsIsAnError checks a city the geocoder cannot find is an
+// error rather than a temperature taken at 0°,0°:
+// the header would otherwise claim a weather for a place nobody asked about.
+func TestACityNoOneKnowsIsAnError(t *testing.T) {
+	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[]}`))
+	}))
+	defer empty.Close()
+
+	c := &Client{Geo: empty.URL}
+	if report, err := c.FetchCity(context.Background(), "没有这个城市"); err == nil {
+		t.Fatalf("a city the geocoder does not know read %+v, want an error", report)
+	}
+	if _, err := c.FetchCity(context.Background(), "   "); err == nil {
+		t.Error("an empty city was read as a place")
 	}
 }
 

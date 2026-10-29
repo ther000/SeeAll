@@ -7,6 +7,9 @@
 // leaves through a proxy in another country, a service having a bad day. A
 // caller that gets an error keeps whatever it had and asks again later, which
 // is why this package reports a whole Report or nothing at all.
+//
+// The address service can be skipped: FetchCity asks about a city the user
+// named, which is the one answer a proxy cannot move.
 package weather
 
 import (
@@ -132,6 +135,31 @@ func (c *Client) Fetch(ctx context.Context) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
+	return c.report(ctx, where)
+}
+
+// FetchCity asks the sky over a city the user named, without asking the address
+// service where the machine is: a machine whose traffic leaves through a proxy
+// in another country would be given that country's weather, and the user's own
+// answer is the one no proxy can move.
+//
+// The name is whatever the geocoder understands — 重庆, Chongqing, 东京 — and
+// the report is named the way the geocoder names it, so that "chongqing" comes
+// back as 重庆 rather than as what was typed.
+func (c *Client) FetchCity(ctx context.Context, name string) (Report, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Report{}, fmt.Errorf("没有说城市")
+	}
+	where, err := c.coordinates(ctx, name)
+	if err != nil {
+		return Report{}, err
+	}
+	return c.report(ctx, where)
+}
+
+// report is the sky over a place already known.
+func (c *Client) report(ctx context.Context, where place) (Report, error) {
 	code, temp, err := c.sky(ctx, where)
 	if err != nil {
 		return Report{}, err
@@ -153,8 +181,10 @@ type place struct {
 func (c *Client) locate(ctx context.Context) (place, error) {
 	city, cityErr := c.city(ctx)
 	if cityErr == nil && city != "" {
+		// The geocoder names the place too, and that name is used rather than
+		// the address service's words: the manual city and the guessed one
+		// then read the same way in the header.
 		if where, err := c.coordinates(ctx, city); err == nil {
-			where.city = city
 			return where, nil
 		}
 	}
@@ -224,7 +254,8 @@ func (c *Client) whoIs(ctx context.Context) (place, error) {
 }
 
 // coordinates turns a city's name into the coordinates the forecast service
-// asks for.
+// asks for, and names the place the way the geocoder does: what the user typed
+// may be a name only the geocoder can read.
 func (c *Client) coordinates(ctx context.Context, city string) (place, error) {
 	address := or(c.Geo, DefaultGeo) + "?count=1&language=zh&name=" + url.QueryEscape(city)
 	body, err := c.get(ctx, address)
@@ -233,6 +264,7 @@ func (c *Client) coordinates(ctx context.Context, city string) (place, error) {
 	}
 	var answer struct {
 		Results []struct {
+			Name      string  `json:"name"`
 			Latitude  float64 `json:"latitude"`
 			Longitude float64 `json:"longitude"`
 		} `json:"results"`
@@ -243,7 +275,11 @@ func (c *Client) coordinates(ctx context.Context, city string) (place, error) {
 	if len(answer.Results) == 0 {
 		return place{}, fmt.Errorf("找不到 %s 的坐标", city)
 	}
-	return place{lat: answer.Results[0].Latitude, lon: answer.Results[0].Longitude}, nil
+	first := answer.Results[0]
+	if first.Name == "" {
+		first.Name = city
+	}
+	return place{city: first.Name, lat: first.Latitude, lon: first.Longitude}, nil
 }
 
 // sky is the temperature and the weather code at a place.

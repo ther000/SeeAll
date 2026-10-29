@@ -1,6 +1,7 @@
 package system
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,92 @@ import (
 
 	"seeall/internal/weather"
 )
+
+// aWeatherService answers the way the two services do, with the geocoder
+// echoing the name it was asked about: a test can then see which city the
+// monitor actually asked for. The address services fail, so a fetch that
+// reaches them cannot pass.
+func aWeatherService(t *testing.T) *weather.Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/geo":
+			fmt.Fprintf(w, `{"results":[{"name":%q,"latitude":29.5,"longitude":106.5}]}`,
+				r.URL.Query().Get("name"))
+		case "/sky":
+			w.Write([]byte(`{"current":{"temperature_2m":17.6,"weather_code":3}}`))
+		default:
+			http.Error(w, "the address service is not needed here", http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return &weather.Client{
+		IP: srv.URL + "/ip", Who: srv.URL + "/who",
+		Geo: srv.URL + "/geo", Sky: srv.URL + "/sky",
+	}
+}
+
+// TestTheCitySettingWinsOverTheAddressService checks the setting is what the
+// monitor asks about: a machine behind a proxy that leaves through another
+// country still gets the weather of the city its user named.
+func TestTheCitySettingWinsOverTheAddressService(t *testing.T) {
+	in := newTestInstance(t)
+	in.sky.client = aWeatherService(t)
+	in.env.Settings().Set("city", "重庆")
+	in.fetchSky()
+
+	sky := in.weather()
+	if sky == nil {
+		t.Fatalf("a named city produced no weather; log: %v", in.sky.why)
+	}
+	if sky.Place != "重庆" || sky.TempC != 17.6 {
+		t.Errorf("the page says %q %v°C, want 重庆 17.6°C", sky.Place, sky.TempC)
+	}
+}
+
+// TestTheCitySettingTakesEffectOnTheNextFetch checks the setting is read on
+// every fetch rather than kept: saving it in the settings page asks for a
+// refresh, and a refresh has to be enough — no restart of the monitor.
+func TestTheCitySettingTakesEffectOnTheNextFetch(t *testing.T) {
+	in := newTestInstance(t)
+	in.sky.client = aWeatherService(t)
+
+	in.env.Settings().Set("city", "重庆")
+	in.fetchSky()
+	if sky := in.weather(); sky == nil || sky.Place != "重庆" {
+		t.Fatalf("the first city did not reach the page: %+v", sky)
+	}
+
+	in.env.Settings().Set("city", "成都")
+	in.fetchSky()
+	sky := in.weather()
+	if sky == nil {
+		t.Fatal("the second city produced no weather")
+	}
+	if sky.Place != "成都" {
+		t.Errorf("the page still says %q after the setting changed, want 成都", sky.Place)
+	}
+}
+
+// TestAnEmptyCitySettingIsTheAddressService checks the setting's default is
+// "ask the address service": clearing it — or typing the word its placeholder
+// shows — goes back to guessing, rather than leaving the monitor asking a
+// geocoder for a city called 自动.
+func TestAnEmptyCitySettingIsTheAddressService(t *testing.T) {
+	for _, value := range []string{"", "  ", autoCity, "AUTO"} {
+		in := newTestInstance(t)
+		in.sky.client = aWeatherService(t)
+		in.env.Settings().Set("city", value)
+		in.fetchSky()
+
+		if in.weather() != nil {
+			t.Errorf("city %q with no address service still showed weather", value)
+		}
+		if in.sky.why == "" {
+			t.Errorf("city %q failed without saying why", value)
+		}
+	}
+}
 
 // TestThePageCarriesTheSky checks the weather reaches the snapshot in the words
 // and the shape the panel draws, rather than as a code the panel would have to
