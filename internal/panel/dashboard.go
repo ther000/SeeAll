@@ -508,6 +508,7 @@ func (a *App) dashDeviceCard(c *ui.Context, d dash, in *app.Instance, width floa
 	if reported {
 		value, unit = dashValue(primary)
 	}
+	aside, detail := dashDeviceLines(snap, primary, reported)
 	color := dashColor(d, primary)
 	ui.Column(c).Shrink(0).Width(width).Height(dashCardH).MaxHeight(dashCardH).
 		Padding(dashCardPad).Gap(2).Radius(dashCardR).Background(d.card).Children(func() {
@@ -519,9 +520,16 @@ func (a *App) dashDeviceCard(c *ui.Context, d dash, in *app.Instance, width floa
 				dashBadge(c, d, badge, width)
 			}
 		})
-		dashBig(c, d, value, unit)
+		// The level leads; the device's other number sits at the far end of the
+		// same line, where it reads as a property of that level.
+		ui.Row(c).Shrink(0).AlignItems(ui.Baseline).Justify(ui.SpaceBetween).Children(func() {
+			dashBig(c, d, value, unit)
+			if aside != "" {
+				ui.Text(c, aside).FontSize(dashDetailSZ).TextColor(d.muted).MaxLines(1)
+			}
+		})
 		dashChart(c, d, in, primary, color)
-		if detail := dashDeviceDetail(snap, primary, reported); detail != "" {
+		if detail != "" {
 			ui.Text(c, detail).FontSize(dashDetailSZ).TextColor(d.muted).
 				MaxLines(1)
 		}
@@ -545,10 +553,11 @@ func dashDeviceBadge(snap core.Snapshot) string {
 	return snap.Status.String()
 }
 
-// dashDeviceDetail is what a device is and reports on its card's one line: the
-// name the device gives itself, then everything the card's number and badge do
-// not say, as "Rapoo Gaming Device · DPI 1200".
-func dashDeviceDetail(snap core.Snapshot, primary core.Reading, reported bool) string {
+// dashDeviceLines splits what a device reports into the two places its card
+// has: the aside beside the level — the device's other number, such as a
+// mouse's DPI — and the one line under it, which names the device and says
+// whatever neither the level, the badge nor the aside does.
+func dashDeviceLines(snap core.Snapshot, primary core.Reading, reported bool) (aside, detail string) {
 	parts := make([]string, 0, len(snap.Readings)+1)
 	if snap.Title != "" {
 		parts = append(parts, snap.Title)
@@ -564,9 +573,13 @@ func dashDeviceDetail(snap core.Snapshot, primary core.Reading, reported bool) s
 		if r.Label != "" {
 			text = r.Label + " " + text
 		}
+		if aside == "" {
+			aside = text
+			continue
+		}
 		parts = append(parts, text)
 	}
-	return strings.Join(parts, " · ")
+	return aside, strings.Join(parts, " · ")
 }
 
 // dashNumber is a reading's value set large, with its unit beside it: the one

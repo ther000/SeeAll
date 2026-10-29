@@ -220,6 +220,29 @@ func TestTheMouseCardShowsTheDevice(t *testing.T) {
 	if !tt.HasText("DPI 1200") {
 		t.Errorf("the mouse's card does not say the rest of what it reports: %v", tt.Texts())
 	}
+
+	// The DPI sits at the far end of the level's own line, where it reads as a
+	// property of that level, and the line under the card is the device's name
+	// alone.
+	level, ok := tt.Find("72")
+	if !ok {
+		t.Fatalf("the mouse's card has no level: %v", tt.Texts())
+	}
+	dpi, ok := tt.Find("DPI 1200")
+	if !ok {
+		t.Fatalf("the mouse's card has no DPI: %v", tt.Texts())
+	}
+	if dpi.X < level.X+level.W {
+		t.Errorf("the DPI at x=%v is not beside the level at x=%v..%v",
+			dpi.X, level.X, level.X+level.W)
+	}
+	if dpi.Y < level.Y-1 || dpi.Y+dpi.H > level.Y+level.H+1 {
+		t.Errorf("the DPI at y=%v..%v is not on the level's line at y=%v..%v",
+			dpi.Y, dpi.Y+dpi.H, level.Y, level.Y+level.H)
+	}
+	if tt.HasText("Rapoo Gaming Device · DPI 1200") {
+		t.Errorf("the card still repeats the DPI in its line: %v", tt.Texts())
+	}
 }
 
 // TestTheGPUModelDoesNotPushOutItsTitle checks a card's badge gives way to its
