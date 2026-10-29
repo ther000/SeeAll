@@ -12,16 +12,21 @@ import (
 
 // The dashboard is the panel: one page for the whole machine.
 //
-// The score is across the top with the machine's facts, the machine's six parts
-// in cards under them, and the battery and every other device the panel watches
-// on the row after those — the same size as any other card, because a mouse's
-// level is the same kind of fact as a processor's load. The programs behind the
-// numbers close the page. The only other page is the settings, which the
-// header's gear opens and whose own header leads back.
+// The sky over the machine leads the top with the score beside it and the
+// machine's facts under them, the machine's six parts in cards under those, and
+// the battery and every other device the panel watches on the row after them —
+// the same size as any other card, because a mouse's level is the same kind of
+// fact as a processor's load. The programs behind the numbers close the page.
+// The only other page is the settings, which the header's gear opens and whose
+// own header leads back.
+//
+// A machine with no service to ask about the sky leads with its own score
+// instead, in the size the sky would have taken, and a machine that does not
+// score itself leads with its name.
 //
 // The sizes below are the ones a 660×1110 panel — the design's own size, which
 // is 440×740 DIPs on a 150% display — holds with nothing pushed out of the
-// window: a score and the machine's facts, four rows of cards, the programs,
+// window: a lead line, the machine's facts, four rows of cards, the programs,
 // and the room under them. A narrower window keeps every size and gets narrower
 // cards; a display whose whole work area is smaller than the design gets a
 // smaller panel, and its page scrolls.
@@ -85,6 +90,9 @@ type dash struct {
 	hairline ui.Color
 	// badgeText and pillText are the words on those surfaces.
 	badgeText, pillText ui.Color
+	// scorePill is the surface the machine's score sits on once the weather
+	// has the header: the facts' pill, tinted with the accent.
+	scorePill ui.Color
 	// secondary and muted are the second and third ranks of text.
 	secondary, muted ui.Color
 	// mint, teal, amber, gold and blue color what the cards measure.
@@ -136,6 +144,7 @@ func dashFor(c *ui.Context) dash {
 		hairline:  ui.RGBA(255, 255, 255, 0.08),
 		badgeText: ui.Hex("#b9bcc8"),
 		pillText:  ui.Hex("#a9adba"),
+		scorePill: ui.RGBA(79, 214, 169, 0.14),
 		secondary: ui.Hex("#bdbfc6"),
 		muted:     ui.Hex("#9a9ba5"),
 		mint:      ui.Hex("#4fd6a9"),
@@ -217,39 +226,26 @@ func (a *App) dashPage(c *ui.Context, page func()) {
 	ui.Column(c).Grow(1).Shrink(1).Basis(0).Justify(ui.Start).Clip().Children(page)
 }
 
-// dashHeader is the top of the dashboard: how the machine is doing in one
-// number, the pills that say what the machine is, and the two things the panel
-// can do.
+// dashHeader is the top of the dashboard: the sky over the machine when a
+// service can say, how the machine itself is doing, the pills that say what the
+// machine is, and the two things the panel can do.
 func (a *App) dashHeader(c *ui.Context, d dash, snap core.Snapshot) {
 	ui.Column(c).Shrink(0).Padding(8, dashGutter, 4, dashGutter).Gap(6).Children(func() {
 		ui.Row(c).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
 			ui.Row(c).Grow(1).Shrink(1).Basis(0).Gap(8).AlignItems(ui.Baseline).Children(func() {
-				if snap.Health > 0 {
-					// A sun for the score's color, set on the number's own
-					// line: the eye reads "90 很好" as one phrase, not three.
-					ui.Icon(c, iconLogo).FontSize(20).TextColor(d.mint)
-					ui.Text(c, fmt.Sprintf("%d", snap.Health)).FontSize(dashScoreSize).Bold().
-						TextColor(d.Text).NoWrap()
-					if note := snap.HealthNote; note != "" {
-						ui.Text(c, note).FontSize(dashNoteSize).TextColor(d.secondary).NoWrap()
-					}
+				if w := snap.Weather; w != nil {
+					dashWeather(c, d, *w)
 					return
 				}
-				// A machine that does not score itself still gets a heading:
-				// what is being watched, and in what state. With no monitor
-				// to name, the heading is the panel's own.
-				ui.Column(c).Grow(1).Gap(1).Children(func() {
-					title := snap.Title
-					if title == "" {
-						title = "SeeAll"
-					}
-					ui.Text(c, title).FontSize(20).Bold().MaxLines(1)
-					if snap.Subtitle != "" {
-						ui.Text(c, snap.Subtitle).FontSize(dashDetailSZ).TextColor(d.muted).
-							MaxLines(1)
-					}
-				})
+				dashScore(c, d, snap)
 			})
+			// The score steps aside once the sky leads: it is still the one
+			// number about the machine, but it is a fact about the machine
+			// now rather than the page's subject, so it is set as a pill the
+			// way the machine's facts are.
+			if snap.Weather != nil && snap.Health > 0 {
+				dashScorePill(c, d, snap.Health, snap.HealthNote)
+			}
 			if dashIconButton(c, d, "刷新", "刷新全部（Ctrl+R）", iconRefresh).Clicked() {
 				a.Host.Refresh()
 			}
@@ -268,6 +264,93 @@ func (a *App) dashHeader(c *ui.Context, d dash, snap core.Snapshot) {
 					dashFact(c, d, f.Text(), cap)
 				}
 			})
+		}
+	})
+}
+
+// dashWeather leads the header with the sky: the shape it has, the temperature
+// in the score's own size, and the sky in a word. It is the same three things
+// the score says — a mark, a number and a word — about the place the machine is
+// in rather than about the machine.
+func dashWeather(c *ui.Context, d dash, w core.Weather) {
+	ui.Icon(c, weatherIcon(w.Kind)).FontSize(20).TextColor(dashSkyColor(d, w.Kind))
+	ui.Text(c, fmt.Sprintf("%.0f°", w.TempC)).FontSize(dashScoreSize).Bold().
+		TextColor(d.Text).NoWrap().Tooltip(weatherTooltip(w))
+	if w.Text != "" {
+		ui.Text(c, w.Text).FontSize(dashNoteSize).TextColor(d.secondary).NoWrap()
+	}
+}
+
+// weatherTooltip says where the temperature is for and when it was taken: two
+// things the header has no room for and a reader may still want.
+func weatherTooltip(w core.Weather) string {
+	if w.Place == "" || w.At.IsZero() {
+		return w.Place
+	}
+	return fmt.Sprintf("%s · %s 更新", w.Place, w.At.Format("15:04"))
+}
+
+// dashSkyColor colors the sky's shape by what it shows: the sun is the
+// dashboard's gold, what falls out of the cloud is its blue, and a covered sky
+// is the quietest rank of text.
+func dashSkyColor(d dash, kind string) ui.Color {
+	switch kind {
+	case "sun", "partly":
+		return d.gold
+	case "rain", "snow":
+		return d.blue
+	case "thunder":
+		return d.amber
+	}
+	return d.secondary
+}
+
+// dashScorePill is the machine's score once the weather leads the header: the
+// facts' pill in the score's own color, because it is a judgement of the whole
+// machine rather than one of its parts.
+//
+// It sits on the header's first line, beside the two buttons, and not on the
+// facts' line: four facts fill a 440 DIP panel exactly, and a fifth pill there
+// would cut them. The score is the one thing on the page that may be made
+// smaller without losing anything.
+func dashScorePill(c *ui.Context, d dash, health int, note string) {
+	text := fmt.Sprintf("%d", health)
+	if note != "" {
+		text += " " + note
+	}
+	ui.Row(c).Shrink(0).Padding(4, dashFactPadX).Radius(12).Background(d.scorePill).
+		Children(func() {
+			ui.Text(c, text).FontSize(12.5).TextColor(d.mint).MaxLines(1)
+		})
+}
+
+// dashScore is the header's lead when there is no sky to show: how the machine
+// is doing in one number, or — for a source that does not score itself — what
+// is being watched and in what state.
+func dashScore(c *ui.Context, d dash, snap core.Snapshot) {
+	if snap.Health > 0 {
+		// A sun for the score's color, set on the number's own
+		// line: the eye reads "90 很好" as one phrase, not three.
+		ui.Icon(c, iconLogo).FontSize(20).TextColor(d.mint)
+		ui.Text(c, fmt.Sprintf("%d", snap.Health)).FontSize(dashScoreSize).Bold().
+			TextColor(d.Text).NoWrap()
+		if note := snap.HealthNote; note != "" {
+			ui.Text(c, note).FontSize(dashNoteSize).TextColor(d.secondary).NoWrap()
+		}
+		return
+	}
+	// A machine that does not score itself still gets a heading:
+	// what is being watched, and in what state. With no monitor
+	// to name, the heading is the panel's own.
+	ui.Column(c).Grow(1).Gap(1).Children(func() {
+		title := snap.Title
+		if title == "" {
+			title = "SeeAll"
+		}
+		ui.Text(c, title).FontSize(20).Bold().MaxLines(1)
+		if snap.Subtitle != "" {
+			ui.Text(c, snap.Subtitle).FontSize(dashDetailSZ).TextColor(d.muted).
+				MaxLines(1)
 		}
 	})
 }

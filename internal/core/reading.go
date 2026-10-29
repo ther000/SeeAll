@@ -233,6 +233,24 @@ func FormatDuration(d time.Duration) string {
 	}
 }
 
+// Weather is the sky over the machine, which is the one thing the dashboard's
+// header says that is not about the machine's own parts. It comes from a
+// service rather than from the machine, so it can be missing on a machine that
+// is offline and is not a reading a card is made of.
+type Weather struct {
+	// TempC is the air temperature in degrees Celsius.
+	TempC float64
+	// Text names the sky in a word: "晴", "多云", "小雨".
+	Text string
+	// Kind is the shape it is drawn as: "sun", "partly", "cloud", "fog",
+	// "rain", "snow", "thunder".
+	Kind string
+	// Place is the city it is for: "重庆".
+	Place string
+	// At is when it was fetched.
+	At time.Time
+}
+
 // Snapshot is what a source reports after one poll: a status, the readings
 // behind it, and where they came from.
 type Snapshot struct {
@@ -259,6 +277,10 @@ type Snapshot struct {
 	Health int
 	// HealthNote is what Health means in a word: "很好", "偏低".
 	HealthNote string
+	// Weather is the sky over the machine, when the source can ask a service
+	// about it. Nil means there is none to show: no service answered, the
+	// last answer is too old to be true, or the source does not ask at all.
+	Weather *Weather
 	// Facts are the pills across the top of the dashboard, in the order it
 	// shows them: the processor's name, the memory total, the uptime.
 	Facts []Fact

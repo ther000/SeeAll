@@ -15,7 +15,7 @@ func Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		ID:              "system",
 		Name:            "本机",
-		Summary:         "CPU、内存、电池、网络、GPU 与开机时长",
+		Summary:         "CPU、内存、电池、网络、GPU、天气与开机时长",
 		Kind:            plugin.KindSystem,
 		Icon:            "cpu",
 		DefaultInstance: "本机",
@@ -46,6 +46,9 @@ type instance struct {
 	// problem is the last thing written to the log, so that a condition that
 	// lasts does not repeat itself on every sample.
 	problem string
+	// sky is the weather over the machine, kept on its own clock: see
+	// weather.go.
+	sky skyState
 }
 
 // Start implements plugin.Instance.
@@ -58,6 +61,10 @@ func (in *instance) Start() {
 	in.sampler.logf = in.env.Logf
 	in.sampler.init()
 	in.collect()
+	// The sky is asked for on a channel of its own, so that a refresh can
+	// wake it without waiting for the quarter of an hour to be over.
+	in.sky.wake = make(chan struct{}, 1)
+	go in.watchSky(in.quit)
 	go func(quit <-chan struct{}) {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
@@ -83,7 +90,12 @@ func (in *instance) Stop() {
 }
 
 // Poll implements plugin.Instance.
-func (in *instance) Poll() { in.collect() }
+func (in *instance) Poll() {
+	in.collect()
+	// The refresh button refreshes the page's numbers; the sky is one of
+	// them, so it is asked again too rather than waiting its turn.
+	in.refreshSky()
+}
 
 // collect samples the machine and publishes what it found.
 func (in *instance) collect() {
@@ -130,6 +142,7 @@ func (in *instance) collect() {
 		Readings:   readings(m),
 		Health:     health,
 		HealthNote: note,
+		Weather:    in.weather(),
 		Facts:      facts(m),
 		Processes:  topProcesses(m.Processes, processCount),
 	})

@@ -24,6 +24,17 @@ const (
 	tempSVG    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.9V5.5a2 2 0 1 1 4 0v8.4a4.5 4.5 0 1 1-4 0z"/><path d="M12 9.5v6"/></svg>`
 	batterySVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7.5" width="16.5" height="9" rx="2.2"/><path d="M21.5 10.8v2.4"/><path d="M5.5 10.8v2.4M8.5 10.8v2.4M11.5 10.8v2.4"/></svg>`
 	gaugeSVG   = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 12l4.2-3"/></svg>`
+	// The sky's shapes: the header leads with one of these, drawn in the color
+	// the sky has rather than in the theme's text color. They share one cloud,
+	// because four of the five skies are the same cloud with something
+	// falling out of it.
+	skySunSVG     = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.2v2.4M12 19.4v2.4M2.2 12h2.4M19.4 12h2.4M5.1 5.1l1.7 1.7M17.2 17.2l1.7 1.7M18.9 5.1l-1.7 1.7M6.8 17.2l-1.7 1.7"/></svg>`
+	skyPartlySVG  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6.8" r="3"/><path d="M12 1.8v1.4M7 2.9l1 1M17 2.9l-1 1M5.6 6.8H7M17 6.8h1.4"/><path d="M6.2 21.4h9.4a3.1 3.1 0 0 0 .3-6.18 4.45 4.45 0 0 0-8.52-1.4A3.55 3.55 0 0 0 6.2 21.4z"/></svg>`
+	skyCloudSVG   = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 18.5h10.3a3.6 3.6 0 0 0 .35-7.18 5.2 5.2 0 0 0-9.96-1.6A4.35 4.35 0 0 0 6.5 18.5z"/></svg>`
+	skyFogSVG     = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 14.5h10.3a3.6 3.6 0 0 0 .35-7.18 5.2 5.2 0 0 0-9.96-1.6A4.35 4.35 0 0 0 6.5 14.5z"/><path d="M4.5 18h15M7.5 21.5h9"/></svg>`
+	skyRainSVG    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 14.5h10.3a3.6 3.6 0 0 0 .35-7.18 5.2 5.2 0 0 0-9.96-1.6A4.35 4.35 0 0 0 6.5 14.5z"/><path d="M8.6 17.6l-.8 2.8M12.4 17.6l-.8 2.8M16.2 17.6l-.8 2.8"/></svg>`
+	skySnowSVG    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 14.5h10.3a3.6 3.6 0 0 0 .35-7.18 5.2 5.2 0 0 0-9.96-1.6A4.35 4.35 0 0 0 6.5 14.5z"/><path d="M8.2 18.2v3M6.9 19.1l2.6 1.2M9.5 19.1l-2.6 1.2M15.8 18.2v3M14.5 19.1l2.6 1.2M17.1 19.1l-2.6 1.2"/></svg>`
+	skyThunderSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 14.5h10.3a3.6 3.6 0 0 0 .35-7.18 5.2 5.2 0 0 0-9.96-1.6A4.35 4.35 0 0 0 6.5 14.5z"/><path d="M12.9 16.4l-2.6 3.6h3.3l-1.2 3"/></svg>`
 )
 
 var (
@@ -41,7 +52,36 @@ var (
 	iconTemp    = ui.MustParseSVG([]byte(tempSVG))
 	iconBattery = ui.MustParseSVG([]byte(batterySVG))
 	iconGauge   = ui.MustParseSVG([]byte(gaugeSVG))
+
+	iconSkySun     = ui.MustParseSVG([]byte(skySunSVG))
+	iconSkyPartly  = ui.MustParseSVG([]byte(skyPartlySVG))
+	iconSkyCloud   = ui.MustParseSVG([]byte(skyCloudSVG))
+	iconSkyFog     = ui.MustParseSVG([]byte(skyFogSVG))
+	iconSkyRain    = ui.MustParseSVG([]byte(skyRainSVG))
+	iconSkySnow    = ui.MustParseSVG([]byte(skySnowSVG))
+	iconSkyThunder = ui.MustParseSVG([]byte(skyThunderSVG))
 )
+
+// weatherIcon maps the sky's kind to the shape the header draws before its
+// temperature. A kind this panel does not know is drawn as a covered sky, which
+// says the least of the seven.
+func weatherIcon(kind string) *ui.SVG {
+	switch kind {
+	case "sun":
+		return iconSkySun
+	case "partly":
+		return iconSkyPartly
+	case "fog":
+		return iconSkyFog
+	case "rain":
+		return iconSkyRain
+	case "snow":
+		return iconSkySnow
+	case "thunder":
+		return iconSkyThunder
+	}
+	return iconSkyCloud
+}
 
 // iconFor maps a manifest's icon name to the SVG it means.
 func iconFor(name string) *ui.SVG {

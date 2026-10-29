@@ -3,6 +3,7 @@ package panel
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -35,6 +36,9 @@ func dashFixture(t *testing.T) (*app.Host, *App) {
 	h.Inject("system", core.Snapshot{
 		Status: core.StatusOK, Title: "DESKTOP-4K1", Subtitle: "Windows 11 26H2", Primary: "cpu",
 		Health: 90, HealthNote: "很好",
+		Weather: &core.Weather{
+			TempC: 18, Text: "多云", Kind: "partly", Place: "重庆", At: time.Now(),
+		},
 		Facts: []core.Fact{
 			{Value: "Ryzen 7 6800H"},
 			{Value: "13.7 GB"},
@@ -336,6 +340,100 @@ func TestTheFactsStayInsideTheirPills(t *testing.T) {
 	}
 	if end > float32(p.Size.Width-dashGutter)+0.5 {
 		t.Errorf("the last pill's words end at x=%v, outside the header's room", end)
+	}
+}
+
+// TestTheWeatherLeadsTheHeader: with a service that answers, the top of the
+// page is the sky — a mark, the temperature and the word for it — and the
+// machine's score steps back to a pill beside the buttons instead of the big
+// number it is when no sky is known.
+func TestTheWeatherLeadsTheHeader(t *testing.T) {
+	_, p := dashFixture(t)
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+
+	temp, ok := tt.Find("18°")
+	if !ok {
+		t.Fatalf("the header does not say the temperature: %v", tt.Texts())
+	}
+	word, ok := tt.Find("多云")
+	if !ok {
+		t.Fatalf("the header does not say what the sky is doing: %v", tt.Texts())
+	}
+	if word.X < temp.X+temp.W {
+		t.Errorf("the sky's word at x=%v is not beside the temperature at x=%v..%v",
+			word.X, temp.X, temp.X+temp.W)
+	}
+
+	score, ok := tt.Find("90 很好")
+	if !ok {
+		t.Fatalf("the score is not on the page at all: %v", tt.Texts())
+	}
+	// Small: a pill's words, not the 42-pixel number the score is on a page
+	// with no sky.
+	if score.H > 26 {
+		t.Errorf("the score is set %v tall, want the facts' size rather than the header's",
+			score.H)
+	}
+	if score.X < word.X+word.W {
+		t.Errorf("the score at x=%v is not to the right of the sky that ends at %v",
+			score.X, word.X+word.W)
+	}
+	// The big number is gone: it is the same fact, and a fact told twice is a
+	// line nobody reads.
+	for _, s := range tt.Texts() {
+		if s == "90" {
+			t.Errorf("the header still draws the score as its own number: %v", tt.Texts())
+		}
+	}
+}
+
+// TestTheScoreLeadsWithoutASky: a machine whose source cannot ask about the
+// weather — one that is offline, or a source that never asks — leads with its
+// score in the size the sky would have taken, rather than with an empty space.
+func TestTheScoreLeadsWithoutASky(t *testing.T) {
+	h, p := dashFixture(t)
+	snap := h.Instance("system").Snapshot()
+	snap.Weather = nil
+	h.Inject("system", snap)
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+
+	score, ok := tt.Find("90")
+	if !ok {
+		t.Fatalf("a page with no weather lost its score: %v", tt.Texts())
+	}
+	if score.H < 40 {
+		t.Errorf("the score is set %v tall, want the header's own size", score.H)
+	}
+	if !tt.HasText("很好") {
+		t.Errorf("the score lost its word: %v", tt.Texts())
+	}
+	if tt.HasText("多云") {
+		t.Errorf("a page with no weather draws weather: %v", tt.Texts())
+	}
+}
+
+// TestTheScoreNeverCrowdsTheFacts: the score is a pill on the header's first
+// line, not a fifth fact. The four facts fill a 440 DIP panel — the one a 150%
+// display gives the design — exactly, so a fifth pill there would cut them, and
+// the fact that would lose its end is the machine's uptime.
+func TestTheScoreNeverCrowdsTheFacts(t *testing.T) {
+	_, p := dashFixture(t)
+	p.SetSize(Fit(2560, 1440, 1.5)) // 440×740
+	tt := ui.NewTester(p.View, p.Size.Width, p.Size.Height)
+
+	for _, fact := range []string{"Ryzen 7 6800H", "13.7 GB", "Windows 11 26H2", "已运行 2天2小时"} {
+		if !tt.HasText(fact) {
+			t.Errorf("the weather and the score crowded the fact %q: %v", fact, tt.Texts())
+		}
+	}
+	score, ok := tt.Find("90 很好")
+	if !ok {
+		t.Fatalf("the score is not on the page: %v", tt.Texts())
+	}
+	facts, _ := tt.Find("Ryzen 7 6800H")
+	if score.Y+score.H > facts.Y {
+		t.Errorf("the score at y=%v..%v is not above the facts' line at y=%v",
+			score.Y, score.Y+score.H, facts.Y)
 	}
 }
 

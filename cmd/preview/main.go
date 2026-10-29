@@ -127,13 +127,17 @@ func fixture(size panel.Metrics) (*app.Host, *panel.App) {
 		},
 	}, map[string][]float64{"battery": wave(72, 40, 8, 3)})
 
-	// The machine, as the dashboard describes it: a score, the four facts
-	// across the top, the six parts of it, the battery, and the programs
-	// behind the numbers.
+	// The machine, as the dashboard describes it: the sky over it, a score, the
+	// four facts across the top, the six parts of it, the battery, and the
+	// programs behind the numbers.
 	inject("system", core.Snapshot{
 		At: now.Add(-1 * time.Second), Status: core.StatusOK,
 		Title: "DESKTOP-4K1", Subtitle: "Windows 11 26H2 · windows/amd64", Primary: "cpu",
 		Health: 90, HealthNote: "很好",
+		Weather: &core.Weather{
+			TempC: 18, Text: "多云", Kind: "partly", Place: "重庆",
+			At: now.Add(-4 * time.Minute),
+		},
 		Facts: []core.Fact{
 			{Value: "Ryzen 7 6800H"},
 			{Value: "13.7 GB"},

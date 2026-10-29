@@ -149,7 +149,7 @@ Height = round(1110 / scale)
 
 面板只有一套外观，也**只有一页**：`Selected` 只在「是不是设置页」上有意义，其余时候画的是
 所有监控项的聚合页。自上而下：画布（左暖紫到右蓝的渐变 + 页脚一层暖光，`Painter.FillGradient`
-直接画）→ 头（健康分、评语、`Facts` 胶囊，右上角刷新与设置两个图标按钮）→ 卡片（机器六张
+直接画）→ 头（天气、退成胶囊的健康分、`Facts` 胶囊，右上角刷新与设置两个图标按钮）→ 卡片（机器六张
 两列，电池与每个设备各一张，同样大小）→ 进程卡 → 16 的底部留白。没有页脚栏，也没有标签页。
 
 面板每帧把 `ui.Theme` 改成深色（`dashFor`），控件、滚动条、开关都跟着深——它是设计成深色的
@@ -175,6 +175,32 @@ Height = round(1110 / scale)
 短的先按原样站住，剩下的平分给长的），再靠 `MaxLines(1)` 收尾。
 
 头在 `Health == 0` 时改画机器名——一个不打分的数据源不该顶着一个假分数。进程卡没有数据就整块不出现。
+
+### 天气
+
+头顶那个位置本来只归健康分，现在归天气：`Snapshot.Weather` 非 nil 时，左边画天气的图形、温度和一句
+天气词（和原来的「太阳 + 大数字 + 评语」同一个节奏，说的是地方而不是机器）；健康分退到第一行右端，
+做成和 `Facts` 一样的胶囊（`90 很好`，绿色描字）。`Weather` 为 nil 时画面回到原样：大评分 + 评语。
+这和 `Health == 0` 改画机器名是同一条链：有什么画什么，都没有就退回下一档。
+
+**评分胶囊不在 `Facts` 那一行。** 四颗胶囊在 440 DIP 下正好排满（量出来字到 406，框宽 408），第五颗
+塞进去就得把「已运行 2天18小时」裁掉两个字。所以评分胶囊画在第一行、挨着两个图标按钮；
+`TestTheScoreNeverCrowdsTheFacts` 钉住这件事：天气在、四颗胶囊一个不裁、评分在它们上面那一行。
+
+**天气不是读数**：不进 `Readings`，也不占一张卡。它来自插件之外的服务，可以没有，所以是 `Snapshot`
+上的可选字段，而不是一条每天都会有的读数。
+
+来源和节奏在 `internal/weather` 与 `system/weather.go`：
+
+- **城市**：先问 `myip.ipip.net`（回答「当前 IP：… 来自于：中国 重庆 重庆」），城市名交给
+  Open-Meteo 的 geocoding 换经纬度；这条不通就退到 `ipwho.is`（城市和经纬度一次给全）。
+- **天空**：`api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code`。WMO 码到中文
+  和图形的映射在 `weather.Report` 的 `Text()` / `Kind()` 里，面板只认 `Kind` 的七个名字
+  （sun / partly / cloud / fog / rain / snow / thunder），不认码。
+- **节奏**：十五分钟一次，在插件自己的 goroutine 上跑；机器本身还是两秒一次，两者不该互相拖。
+  点刷新会顺手叫醒天气。
+- **失败**：保留上一次成功的结果，同一句错误只写一行日志；**超过 45 分钟**（三次刷新）的结果按没有
+  处理——合盖睡一夜醒来，不该显示昨晚的温度。
 
 设置页的页头换成「‹ 返回 + 设置」：返回目标用 `Host.LastInstance()`（`SetSelected(SettingsPage)`
 本来就不写它），所以从哪一页进来就回哪一页。
@@ -293,6 +319,8 @@ Windows 上 `SetOpacity` 走 `WS_EX_LAYERED` + `SetLayeredWindowAttributes`：�
 - 电池健康度：`CM_Get_Device_Interface_List` 找到电池设备，`IOCTL_BATTERY_QUERY_INFORMATION`
   读 `DesignedCapacity` 与 `FullChargedCapacity`；拿不到就不写「健康 78%」那个徽标。
 - 自带只有鼠标和本机两个插件：插件化是给后续监控对象留的口子，不是一次塞满托盘。
+- 天气靠 IP 定位：认的是**出口 IP**，挂着全局代理时会定到代理落地那座城市。这是免 key 方案的
+  固有限制；服务不通时左上角回到健康分，不显示一个编出来的温度。
 
 ## 验证过的事
 
