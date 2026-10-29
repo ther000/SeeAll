@@ -25,9 +25,12 @@ func Manifest() plugin.Manifest {
 			// that country's weather, and only the user knows better. Empty
 			// means "ask the address service", which is right for most
 			// machines and needs no setting made.
+			// The note is short because it sits in the column left of the
+			// field: at 150% scaling that column is some 230 pixels across,
+			// and a longer sentence breaks a city name in half.
 			{Key: "city", Label: "城市", Type: plugin.SettingText, Default: "",
 				Placeholder: "自动",
-				Description: "留空按 IP 定位，填城市名就固定用它（如 重庆）"},
+				Description: "留空按 IP 定位，填城市名就固定用它"},
 			// The list is filled in when the page is drawn: which cards a
 			// machine has is not known until it is running.
 			{Key: "gpu", Label: "GPU", Type: plugin.SettingChoice, Default: gpuAuto,

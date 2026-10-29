@@ -165,11 +165,16 @@ func (a *App) settingField(c *ui.Context, p palette, in *app.Instance, def plugi
 			}
 		})
 	default:
-		ui.Column(c).Gap(4).Children(func() {
-			ui.Text(c, def.Label).FontSize(12)
-			value := drafts[def.Key]
+		// A typed setting sits on its row the way a choice does: the name
+		// and the note that explains it on the left, the field on the
+		// right. A field across the whole card would be a column of its
+		// own, and the page would read as two different layouts.
+		value := drafts[def.Key]
+		controlRow(c, p, def.Label, def.Description, func() {
+			// The field is as wide as a choice rather than as wide as the
+			// card: what it holds — a city, a port — is short.
 			field := ui.TextInput(c, &value).Placeholder(def.Placeholder).Label(def.Label).
-				FillWidth()
+				Width(controlW)
 			if value != drafts[def.Key] {
 				a.drafts[in.ID+"/"+def.Key] = value
 				// Numbers are written as they parse; text is written
@@ -181,9 +186,6 @@ func (a *App) settingField(c *ui.Context, p palette, in *app.Instance, def plugi
 			}
 			if field.Submitted() {
 				a.commit(in, def.Key, value)
-			}
-			if def.Description != "" {
-				ui.Text(c, def.Description).FontSize(11).TextColor(p.TextMuted).Wrap()
 			}
 		})
 	}

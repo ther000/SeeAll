@@ -120,3 +120,43 @@ func TestTheSettingsPageOnlyOffersSettings(t *testing.T) {
 		}
 	}
 }
+
+// TestATypedSettingSitsOnItsRow checks the city's field is beside its name and
+// note rather than across the whole card: every control on the page ends on the
+// card's inner edge, so a typed setting reads like the choice under it instead
+// of turning the page into two layouts.
+func TestATypedSettingSitsOnItsRow(t *testing.T) {
+	_, p := fixture(t)
+	p.SetSelected(SettingsPage)
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+
+	name, ok := tt.Find("城市")
+	if !ok {
+		t.Fatalf("the city setting has no name: %v", tt.Texts())
+	}
+	note, ok := tt.Find("留空按 IP 定位，填城市名就固定用它")
+	if !ok {
+		t.Fatalf("the city setting has no note: %v", tt.Texts())
+	}
+
+	// Where the field has to be: on the line the note explains, at the end of
+	// the card's inner edge. Pressing there types into it only if it is there.
+	x := float32(DesignWidth-Gutter-cardPadX) - 30
+	y := (name.Y + note.Y + note.H) / 2
+	tt.ClickAt(x, y)
+	active, _ := tt.TextInputActive()
+	caret, hasCaret := tt.TextCaret()
+	if !active || !hasCaret {
+		t.Fatalf("pressing %.0f,%.0f types into nothing: the field is not on the right of its row",
+			x, y)
+	}
+	if caret.X < DesignWidth/2 {
+		t.Errorf("the field starts at x=%v on the left of the page, not at its end", caret.X)
+	}
+	// The row is the two lines the name and the note take; a field above or
+	// below them is a layout of its own.
+	if caret.Y < name.Y || caret.Y+caret.H > note.Y+note.H {
+		t.Errorf("the field at y=%v..%v is not on the row the name at y=%v..%v and the note at y=%v..%v take",
+			caret.Y, caret.Y+caret.H, name.Y, name.Y+name.H, note.Y, note.Y+note.H)
+	}
+}

@@ -20,6 +20,10 @@ const (
 	// it.
 	cardRadius    = 12
 	controlRadius = 8
+	// controlW is how wide a typed setting's field is: the room a choice
+	// takes (ui.Select opens at 35 units of the theme's spacing, 140 here),
+	// so a field and a drop-down end on the same edge.
+	controlW = 140
 )
 
 // palette is the look the settings page draws with: the dashboard's surfaces in
