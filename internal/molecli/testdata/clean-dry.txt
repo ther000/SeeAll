@@ -1,0 +1,32 @@
+
+[1;35mClean Your Windows[0m
+
+[33mDry Run Mode[0m - Preview only, no deletions
+
+[34m?[0m Microsoft Windows 11 ×¨Òµ°æ | Free space: 64.51GB
+
+[1;35m? User essentials[0m
+  [0;32m? [0mNothing to tidy
+
+[1;35m? Browser caches[0m
+  [0;32m? [0mNothing to tidy
+
+[1;35m? Application caches[0m
+  [0;32m? [0mNothing to tidy
+
+[1;35m? Developer tools[0m
+  [0;33m¡ú [0mnpm cache
+  [0;33m¡ú [0mBun cache [0;33m(1 item, 888KB dry)[0m
+  [0;33m¡ú [0mGo build cache
+  [0;33m¡ú [0mGo module cache [0;33m(2 items, 131.8MB dry)[0m
+
+[1;35m? Applications[0m
+  [0;32m? [0mNothing to tidy
+
+======================================================================
+[0;34mDry run complete - no changes made[0m
+Potential space: [0;32m132.7MB[0m | Items: 3
+Free space: 64.50GB
+Detailed file list: C:\Users\Administrator\.config\mole\clean-list.txt
+======================================================================
+

@@ -1,0 +1,34 @@
+
+[1;35mOptimize and Maintain[0m
+
+[33m¡ú DRY RUN MODE[0m - No changes will be made
+
+[34m?[0m System  9.8/13.7GB RAM | 95/159GB Disk | Uptime 2.8d
+
+[34m? Disk Health[0m
+  [32m?[0m SAMSUNG MZVL2512HCJQ-00B00 - Healthy
+  [32m?[0m HYV1TBX4 - Healthy
+
+[34m? Disk Optimization[0m
+  [33m¡ú[0m Would optimize C:
+
+[34m? DNS Cache[0m
+  [33m¡ú[0m Would flush DNS cache
+
+[34m? Network Optimization[0m
+  [33m¡ú[0m Would clear ARP cache
+
+[34m? Startup Programs[0m
+  [90m16 startup programs[0m
+
+[34m? Windows Update[0m
+  [90mCould not check Windows Update status[0m
+
+[34m? System Image[0m
+  [33m¡ú[0m Would check the system image
+
+======================================================================
+[0;34mDry run complete - no changes made[0m
+Would apply 3 optimizations
+======================================================================
+

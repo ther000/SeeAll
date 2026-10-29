@@ -1,0 +1,18 @@
+[1;35mClean Your Windows[0m
+
+[33mDry Run Mode[0m - Preview only, no deletions
+
+[34m?[0m Microsoft Windows 11 Pro | Free space: 64.50GB
+
+[1;35m? User essentials[0m
+  [0;32m? [0mNothing to tidy
+
+[1;35m? Application caches[0m
+  [0;32m? [0mNothing to tidy
+
+======================================================================
+[0;34mDry run complete - no changes made[0m
+No significant reclaimable space detected.
+Free space: 64.50GB
+======================================================================
+

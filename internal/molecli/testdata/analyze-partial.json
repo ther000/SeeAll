@@ -1,0 +1,41 @@
+{
+  "scan_status": "partial",
+  "path": "",
+  "overview": true,
+  "entries": [
+    {
+      "scan_status": "complete",
+      "name": "Game (F:)",
+      "path": "F:\\",
+      "size": 456126095360,
+      "is_dir": true
+    },
+    {
+      "scan_status": "partial",
+      "name": "Temp Files",
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp",
+      "size": 1438362264,
+      "is_dir": true,
+      "insight": true
+    },
+    {
+      "scan_status": "unavailable",
+      "name": "User AppData",
+      "path": "C:\\Users\\Administrator\\AppData",
+      "size": 0,
+      "is_dir": true,
+      "cleanable": true,
+      "last_access": "2026-10-20T08:00:00+08:00"
+    },
+    {
+      "scan_status": "complete",
+      "name": "npm Cache",
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\npm-cache",
+      "size": 5213151,
+      "is_dir": true,
+      "insight": true,
+      "cleanable": true
+    }
+  ],
+  "total_size": 458085772939
+}

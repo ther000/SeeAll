@@ -20,7 +20,9 @@ import (
 
 	"seeall/internal/app"
 	"seeall/internal/core"
+	"seeall/internal/molecli"
 	"seeall/internal/panel"
+	"seeall/internal/plugins/mole"
 	"seeall/internal/tray"
 )
 
@@ -44,10 +46,11 @@ func main() {
 		panel.MarginDIP(displayScale))
 	fitted := panel.Fit(area.Width, area.Height, displayScale)
 
-	// The panel has two pages: the machine's dashboard and the settings. Both
-	// are drawn at the size this display gives the panel — 440×740 DIPs — and
-	// the scale is pixels per design pixel, so a shot is 1320×2220 at -scale 2
-	// whichever page it shows.
+	// The panel has three pages: the machine's dashboard, the settings, and
+	// the Mole page that runs the cleanup commands. All are drawn at the size
+	// this display gives the panel — 440×740 DIPs — and the scale is pixels
+	// per design pixel, so a shot is 1320×2220 at -scale 2 whichever page it
+	// shows.
 	//
 	// Drawing the view at 660×1110 DIPs instead would show a 100% display,
 	// where the panel keeps the design's pixels but draws its page in DIPs:
@@ -62,6 +65,8 @@ func main() {
 		// remembers.
 		{"panel-dashboard", ""},
 		{"panel-dashboard-settings", panel.SettingsPage},
+		// The page that does something rather than watch something.
+		{"panel-mole", "mole"},
 	}
 	for _, shot := range shots {
 		_, p := fixture(fitted)
@@ -179,9 +184,64 @@ func fixture(size panel.Metrics) (*app.Host, *panel.App) {
 		"battery": flat(100, 60),
 	})
 
+	// The Mole page, as if its four commands had already answered. Nothing is
+	// run here: a preview of this machine takes the better part of a minute
+	// and a cleanup would delete files, so the page is filled with the state
+	// those commands would have left behind.
+	seedMole(host, now)
+
 	p := panel.New(host)
 	p.SetSize(size)
 	return host, p
+}
+
+// seedMole fills the Mole page with what its commands would have reported, so
+// that the page can be looked at on a machine it must not touch.
+func seedMole(host *app.Host, now time.Time) {
+	in := host.Instance("mole")
+	if in == nil {
+		return
+	}
+	m, ok := in.Monitor().(*mole.Instance)
+	if !ok {
+		return
+	}
+	m.Seed(mole.Data{
+		Ready: true,
+		Clean: &molecli.Clean{
+			DryRun: true, Bytes: 139_145_000, Size: "132.7MB", Items: 3,
+			Free: "64.51GB",
+			Groups: []molecli.Group{
+				{Name: "Go module cache"},
+				{Name: "Bun cache"},
+				{Name: "npm cache"},
+				{Name: "Go build cache"},
+			},
+		},
+		CleanAt:  now.Add(-6 * time.Minute),
+		Optimize: &molecli.Optimize{DryRun: true, Applied: 12},
+		OptAt:    now.Add(-6 * time.Minute),
+		Disk: &molecli.Analyze{
+			Total: 825_713_577_984,
+			Entries: []molecli.Entry{
+				{Name: "游戏 (F:)", Path: `F:\`, Bytes: 456_126_095_360, Dir: true},
+				{Name: "软件 (E:)", Path: `E:\`, Bytes: 267_992_428_544, Dir: true},
+				{Name: "Win11Pro X64 (C:)", Path: `C:\`, Bytes: 101_595_054_080, Dir: true},
+				{Name: "Program Files", Path: `C:\Program Files`, Bytes: 21_887_737_576, Dir: true},
+				{Name: "User AppData", Path: `C:\Users\tj\AppData`, Bytes: 18_386_637_853, Dir: true},
+				{Name: "Temp Files", Path: `C:\Users\tj\AppData\Local\Temp`,
+					Bytes: 1_438_353_704, Dir: true, Insight: true},
+			},
+		},
+		DiskAt: now.Add(-6 * time.Minute),
+		History: &molecli.History{Sessions: []molecli.Session{
+			{Command: "clean", Started: now.Add(-26 * time.Hour), Count: 12,
+				Actions: map[string]int{"removed": 12}},
+			{Command: "optimize", Started: now.Add(-50 * time.Hour), Count: 4,
+				Actions: map[string]int{"optimized": 4}},
+		}},
+		HistAt: now.Add(-6 * time.Minute),
+	})
 }
 
 // wave makes a plausible history of count samples that ends at v.

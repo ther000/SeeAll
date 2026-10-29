@@ -71,6 +71,12 @@ type Manifest struct {
 	// belong together, so they go in the hero card under the value rather
 	// than as cards of their own beside it.
 	Combined bool
+	// Standalone says the instance is a page of its own rather than a card
+	// on the dashboard: it does things — Mole's cleanup — instead of watching
+	// something, so it opens from the tray and the header. It keeps its line
+	// in the tray menu like any other monitor; it has no settings card because
+	// it declares no settings.
+	Standalone bool
 }
 
 // Plugin creates instances of one kind of monitor.

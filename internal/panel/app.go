@@ -2,10 +2,12 @@ package panel
 
 import (
 	"sort"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"seeall/internal/app"
+	"seeall/internal/plugins/mole"
 )
 
 // App is the panel's state. The view is a function of it, and it changes only
@@ -36,6 +38,12 @@ type App struct {
 	OnOpacity func(float64)
 	// opacityDirty is set while a drag has changed the value but not saved it.
 	opacityDirty bool
+
+	// confirm is the Mole command waiting for its second click, and when it
+	// was asked for. The panel keeps it rather than the plugin because a
+	// confirmation is a thing the user is doing, not a thing Mole is.
+	confirm   mole.Action
+	confirmAt time.Time
 }
 
 // New makes the panel's state.
@@ -72,15 +80,24 @@ func (a *App) Selected() string {
 	return a.selected
 }
 
-// SetSelected shows another page: the settings, or a monitor.
+// SetSelected shows another page: the settings, a monitor, or a plugin's own
+// page. The panel remembers the monitor it was on, so that leaving the settings
+// comes back to the machine rather than to a page nobody chose.
 func (a *App) SetSelected(id string) {
 	a.selected = id
-	if id != SettingsPage {
+	if id != SettingsPage && !a.standalone(id) {
 		a.Host.SetLastInstance(id)
 	}
 	if a.Select != nil {
 		a.Select(id)
 	}
+}
+
+// standalone says whether an ID names a plugin's own page rather than a
+// monitor: those are not what "back" returns to.
+func (a *App) standalone(id string) bool {
+	in := a.Host.Instance(id)
+	return in != nil && in.Manifest().Standalone
 }
 
 // View builds the panel: the machine's dashboard, or the settings it opens.

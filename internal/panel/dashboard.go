@@ -62,6 +62,13 @@ const (
 	dashActionSize = 15
 )
 
+// dashMoleButtonWidth is how wide the panel must be to carry a third header
+// action. Below the design's own 440 DIPs — a 150% display — the header keeps
+// the two buttons every page needs, the refresh and the settings, and Mole is
+// reached from the tray menu: an icon squeezed to nothing is a click nobody can
+// land on.
+const dashMoleButtonWidth = 440
+
 // dashMetricIDs are the readings the dashboard makes a card of first, in the
 // order it puts them: the machine's six parts, widest to narrowest. A reading
 // that is not here still gets a card, after these, unless it is one of the
@@ -188,6 +195,12 @@ func (a *App) dashboard(c *ui.Context) {
 			})
 			return
 		}
+		// A plugin that does something draws its own page: Mole cleans the
+		// disk, which needs a preview and a confirmation rather than a card.
+		if in := a.ownPage(); in != nil {
+			a.molePage(c, d, in)
+			return
+		}
 		if len(instances) == 0 {
 			a.dashHeader(c, d, core.Snapshot{})
 			a.dashPage(c, func() { a.emptyDetail(c, d.palette()) })
@@ -207,9 +220,13 @@ func (a *App) dashboard(c *ui.Context) {
 // composes and the devices it gives a card each. The machine is the monitor
 // that watches the machine itself; a plugin whose readings all describe one
 // device — a mouse and its battery — is a device, whichever order the panel
-// lists the monitors in.
+// lists the monitors in. A plugin with a page of its own is neither: it is
+// drawn there, not here.
 func dashSplit(instances []*app.Instance) (machine *app.Instance, devices []*app.Instance) {
 	for _, in := range instances {
+		if in.Manifest().Standalone {
+			continue
+		}
 		if machine == nil && !in.Manifest().Combined {
 			machine = in
 			continue
@@ -248,6 +265,13 @@ func (a *App) dashHeader(c *ui.Context, d dash, snap core.Snapshot) {
 			}
 			if dashIconButton(c, d, "刷新", "刷新全部（Ctrl+R）", iconRefresh).Clicked() {
 				a.Host.Refresh()
+			}
+			if a.Size.Width >= dashMoleButtonWidth {
+				if in := a.ownInstance(); in != nil {
+					if dashIconButton(c, d, "Mole", "Mole 清理", iconMole).Clicked() {
+						a.SetSelected(in.ID)
+					}
+				}
 			}
 			if dashIconButton(c, d, "打开设置", "设置", iconGear).Clicked() {
 				a.SetSelected(SettingsPage)

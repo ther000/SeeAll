@@ -1,0 +1,20 @@
+# Mole Cleanup Preview - 2026-10-29 14:22:05
+#
+# How to protect files:
+# 1. Copy any path below to C:\Users\Administrator\.config\mole\whitelist.txt
+# 2. Run: mo clean --whitelist
+#
+
+# npm cache
+C:\Users\Administrator\AppData\Local\npm-cache
+
+# Bun cache
+C:\Users\Administrator\.bun\install\cache\@t@
+
+# Go build cache
+C:\Users\Administrator\AppData\Local\go-build
+
+# Go module cache
+C:\Users\Administrator\go\pkg\mod\cache\download
+C:\Users\Administrator\go\pkg\mod\cache\lock
+

@@ -13,14 +13,20 @@ SeeAll 是「鼠标电量显示」的完全重写：同一个托盘小工具，�
 ```
 core    ← 与插件无关的读数模型（Reading / Snapshot / Status / Severity / Ring / 单位格式化）
 plugin  ← 插件契约（Plugin / Instance / Manifest / Env / Settings），只依赖 core
-plugins/* ← 具体插件（mouse、system），依赖 core + plugin + hid（需要时）
+plugins/* ← 具体插件（mouse、system、mole），依赖 core + plugin + hid / molecli（需要时）
+molecli ← 调本机的 mo：进程、输出、解析。不认识面板，也不知道自己会被画成什么
 app     ← 宿主：加载/保存设置、创建与停止实例、快照与历史，只依赖 core + plugin + plugins
-panel   ← 视图，依赖 app + core + plugin + mygo/ui
+panel   ← 视图，依赖 app + core + plugin + plugins/mole + mygo/ui
 tray    ← 图标绘制与面板定位，只依赖 mygo（无 UI 依赖）
 main    ← 组装：窗口、托盘、菜单、自启
 ```
 
 依赖方向单一，插件不知道面板存在，面板不知道 HID 存在。
+
+`panel` 依赖 `plugins/mole` 是唯一一处例外：Mole 的页面要读它自己的实例状态（跑到哪一步、上次预览
+是什么、是否允许清理），这份状态不是读数，进不了 `core.Snapshot`。为了不给所有插件开一个泛型
+「动作」接口，面板直接认这个类型（`app.Instance.Monitor()` 取出 `plugin.Instance` 再断言）；
+换第二页的时候再考虑抽接口，现在抽就是给一个实现写的抽象。
 
 ## 插件契约
 
@@ -45,6 +51,12 @@ type Instance interface {
 `Manifest` 声明：ID、显示名、一句话说明、分组（设备/本机/服务）、图标、
 设置字段（`Setting{Key,Label,Type,Default,...}`）、默认实例名，
 以及 `Combined`——这个插件的读数描述同一个东西，页面用一张卡装下（鼠标：电量/连接/DPI）。
+
+还有 `Standalone`：这一项**不做监控**，仪表盘上不给它卡片，它像设置页一样自己一页
+（Mole 的清理页）。它仍然是一个实例：照旧出现在托盘菜单里（点它打开那一页）、
+照样受宿主的快照与历史管着；设置页上没有它的卡片，因为它一个设置项都不声明。
+`Selected` 指向它的 ID 时就画它的页面。`dashSplit` 见到它就跳过，否则它会顶掉「本机」成为
+仪表盘的那台机器，或者变成一张奇怪的设备卡。
 
 **Manifest 只放有人在读的字段。** 采样频率写在各插件的 `Start()` 里（宿主没有定时器），
 「未验证协议」的标记在它真的有一个未验证协议时才加回来。
@@ -213,6 +225,39 @@ Height = round(1110 / scale)
 
 设置页的页头换成「‹ 返回 + 设置」：返回目标用 `Host.LastInstance()`（`SetSelected(SettingsPage)`
 本来就不写它），所以从哪一页进来就回哪一页。
+
+### Mole 页
+
+这是唯一一页**做事**的页面（`Manifest.Standalone`），所以它不是卡片：页头「‹ 返回 + Mole」，
+下面四张卡——清理、磁盘占用、优化、最近清理。卡片是设置页那套 `card` / `label` / `hline`，
+因为这页和设置页一样是「一条一条的东西」，不是读数网格。
+
+**状态只有一个来源。** 插件实例（`internal/plugins/mole`）持有 `Data`：每次命令的结果、
+正在跑的那条、最后一条命令说了什么；面板每帧 `State()` 拿一份拷贝去画，视图里没有 I/O、
+没有 goroutine、没有锁。点击是事件：按钮调 `Run(action)`，插件开 goroutine 跑 `mo`，
+跑完 `Publish` 一个快照——快照不是为了让仪表盘画一张卡（这页没有卡），而是为了两件事：
+托盘提示那一行，以及**让面板重绘**（`Host.storeSnapshot` 最后会 `OnChange`）。
+秒表不另设定时器：`time.Since(Running.Started)` 每帧算一次，本就跟着 2 秒一次的采样重绘。
+
+**删文件的两个命令有三道闸，而且是从里往外的**：
+
+1. 预览的数据模型：`Clean`/`Optimize` 带 `DryRun`，`CleanRan`/`OptRan` 标记这是不是真跑过，
+   `CleanSpent`/`OptSpent` 标记这次预览是不是已经用来跑过——`mo clean` 真跑时会**重新扫一遍**再删，
+   所以跑过之后（哪怕失败或被取消，它可能已经删掉一半）那次预览就不算数了；
+2. 插件：`Run(Clean)` 在没有半小时内、没用过的预览时返回 `ErrNoPreview` / `ErrStalePreview` /
+   `ErrUsedPreview`，有命令在跑时返回 `ErrBusy`——拦在启动进程之前，所以按钮画错也删不掉东西；
+3. 面板：先不画「立即清理」，点了先变成「确认清理」（`App.confirm` + 一分钟有效期），再点才 `Run`。
+
+清理按钮的颜色是琥珀而不是面板的薄荷色（`moleToneDanger`）：这一页上「读」和「删」必须一眼分得开。
+
+**取消是真的取消。** `molecli` 不用 `exec.CommandContext`（那条路只杀直接子进程，
+powershell 起出来的 `analyze.exe` 会活成孤儿），而是自己 `taskkill /T /F /PID` 收整棵树。
+子进程一律 `CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP`：宿主是 `-H=windowsgui`，
+不加就会在点「预览」的瞬间闪一个黑框。
+
+**面板不重写 Mole 的判断。** 清哪些路径、白名单、覆盖范围全在 Mole 那边；面板只把汇总行
+（`Potential space: … | Items: N`）和清单文件读出来给人看。命令退出码非 0 时，卡片上那两行写
+剥掉 ANSI 的输出尾部，完整的原因进 `seeall.log`——面板只有一行字的宽度，日志没有。
 
 ### 设置页
 

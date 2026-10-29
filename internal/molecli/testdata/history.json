@@ -1,0 +1,76 @@
+{
+    "logs":  {
+                 "operations":  "C:\\Users\\Administrator\\.config\\mole\\operations.log"
+             },
+    "limit":  200,
+    "sessions":  [
+                     {
+                         "command":  "clean",
+                         "run_id":  "9f2c1a4e",
+                         "started_at":  "2026-10-28 09:14:02",
+                         "operation_count":  2,
+                         "actions":  {
+                                         "removed":  1,
+                                         "recycled":  1,
+                                         "uninstalled":  0,
+                                         "skipped":  0,
+                                         "failed":  0,
+                                         "other":  0
+                                     }
+                     },
+                     {
+                         "command":  "optimize",
+                         "run_id":  "1b7d3c88",
+                         "started_at":  "2026-10-28 09:21:40",
+                         "operation_count":  1,
+                         "actions":  {
+                                         "removed":  0,
+                                         "recycled":  0,
+                                         "uninstalled":  0,
+                                         "skipped":  1,
+                                         "failed":  0,
+                                         "other":  0
+                                     }
+                     },
+                     {
+                         "command":  "clean",
+                         "run_id":  "5ad0e6f1",
+                         "started_at":  "2026-10-29 14:22:05",
+                         "operation_count":  0,
+                         "actions":  {
+                                         "removed":  0,
+                                         "recycled":  0,
+                                         "uninstalled":  0,
+                                         "skipped":  0,
+                                         "failed":  0,
+                                         "other":  0
+                                     }
+                     }
+                 ],
+    "operations":  [
+                       {
+                           "timestamp":  "2026-10-28 09:14:07",
+                           "command":  "clean",
+                           "run_id":  "9f2c1a4e",
+                           "action":  "removed",
+                           "path":  "C:\\Users\\Administrator\\AppData\\Local\\go-build",
+                           "detail":  "89.4MB"
+                       },
+                       {
+                           "timestamp":  "2026-10-28 09:14:11",
+                           "command":  "clean",
+                           "run_id":  "9f2c1a4e",
+                           "action":  "recycled",
+                           "path":  "C:\\Users\\Administrator\\.bun\\install\\cache",
+                           "detail":  "888KB"
+                       },
+                       {
+                           "timestamp":  "2026-10-28 09:21:44",
+                           "command":  "optimize",
+                           "run_id":  "1b7d3c88",
+                           "action":  "skipped",
+                           "path":  "System File Checker",
+                           "detail":  "not requested"
+                       }
+                   ]
+}

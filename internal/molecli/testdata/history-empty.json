@@ -1,0 +1,12 @@
+{
+    "logs":  {
+                 "operations":  "C:\\Users\\Administrator\\.config\\mole\\operations.log"
+             },
+    "limit":  200,
+    "sessions":  [
+
+                 ],
+    "operations":  [
+
+                   ]
+}

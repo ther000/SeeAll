@@ -1,0 +1,7 @@
+# Mole Cleanup Preview - 2026-10-29 14:22:05
+#
+# How to protect files:
+# 1. Copy any path below to C:\Users\Administrator\.config\mole\whitelist.txt
+# 2. Run: mo clean --whitelist
+#
+

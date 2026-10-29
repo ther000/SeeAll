@@ -52,6 +52,11 @@ func (in *Instance) History(readingID string) []float64 {
 // Manifest returns the plugin's manifest.
 func (in *Instance) Manifest() plugin.Manifest { return in.Env.Manifest() }
 
+// Monitor returns the plugin's own instance, which is what a page the plugin
+// draws for itself reads from: the dashboard only needs snapshots, but the
+// Mole page asks its instance what it has run.
+func (in *Instance) Monitor() plugin.Instance { return in.monitor }
+
 // Settings returns the instance's settings.
 func (in *Instance) Settings() *plugin.Settings { return in.Env.Settings() }
 

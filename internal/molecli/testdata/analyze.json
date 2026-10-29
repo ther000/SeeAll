@@ -1,0 +1,80 @@
+{
+  "scan_status": "complete",
+  "path": "",
+  "overview": true,
+  "entries": [
+    {
+      "scan_status": "complete",
+      "name": "\u6e38\u620f (F:)",
+      "path": "F:\\",
+      "size": 456126095360,
+      "is_dir": true
+    },
+    {
+      "scan_status": "complete",
+      "name": "\u8f6f\u4ef6 (E:)",
+      "path": "E:\\",
+      "size": 267992760320,
+      "is_dir": true
+    },
+    {
+      "scan_status": "complete",
+      "name": "Win11Pro X64 (C:)",
+      "path": "C:\\",
+      "size": 101471158272,
+      "is_dir": true
+    },
+    {
+      "scan_status": "complete",
+      "name": "Program Files",
+      "path": "C:\\Program Files",
+      "size": 21887737576,
+      "is_dir": true
+    },
+    {
+      "scan_status": "complete",
+      "name": "User AppData",
+      "path": "C:\\Users\\Administrator\\AppData",
+      "size": 18251615743,
+      "is_dir": true
+    },
+    {
+      "scan_status": "complete",
+      "name": "ProgramData",
+      "path": "C:\\ProgramData",
+      "size": 15908015334,
+      "is_dir": true
+    },
+    {
+      "scan_status": "complete",
+      "name": "Program Files (x86)",
+      "path": "C:\\Program Files (x86)",
+      "size": 12496922246,
+      "is_dir": true
+    },
+    {
+      "scan_status": "complete",
+      "name": "Home",
+      "path": "C:\\Users\\Administrator",
+      "size": 6248154227,
+      "is_dir": true
+    },
+    {
+      "scan_status": "complete",
+      "name": "Temp Files",
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp",
+      "size": 1438362264,
+      "is_dir": true,
+      "insight": true
+    },
+    {
+      "scan_status": "complete",
+      "name": "npm Cache",
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\npm-cache",
+      "size": 5213151,
+      "is_dir": true,
+      "insight": true
+    }
+  ],
+  "total_size": 825590013952
+}

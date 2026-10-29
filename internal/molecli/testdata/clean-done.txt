@@ -1,0 +1,13 @@
+[1;35mClean Your Windows[0m
+
+[34m?[0m Microsoft Windows 11 Pro | Free space: 64.50GB
+
+[1;35m? Developer tools[0m
+  [0;33mOK [0mnpm cache [0;33m(1 item, 888KB)[0m
+
+======================================================================
+[0;34mCleanup complete[0m
+Tracked cleanup: [0;32m132.7MB[0m | Items cleaned: 3
+Free space: 64.65GB
+======================================================================
+

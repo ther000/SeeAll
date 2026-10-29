@@ -2,6 +2,7 @@ package app
 
 import (
 	"seeall/internal/plugin"
+	"seeall/internal/plugins/mole"
 	"seeall/internal/plugins/mouse"
 	"seeall/internal/plugins/system"
 )
@@ -16,5 +17,6 @@ func Builtin() []plugin.Plugin {
 	return []plugin.Plugin{
 		mouse.Plugin{},
 		system.Plugin{},
+		mole.Plugin{},
 	}
 }
