@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -562,6 +563,77 @@ func TestDashboardDegradesWithoutData(t *testing.T) {
 	}
 	if !tt.HasText("高负载") {
 		t.Errorf("a busy processor is not called one: %s", texts)
+	}
+}
+
+// TestTheHeaderHoldsTheScreenOn checks the header's own button holds the
+// screen on and then lets it go: a hold nobody can release is a screen that
+// stays lit all night, and a button that only turns on would look the same.
+func TestTheHeaderHoldsTheScreenOn(t *testing.T) {
+	_, p := dashFixture(t)
+	var asked []bool
+	p.OnKeepAwake = func(on bool) error {
+		asked = append(asked, on)
+		return nil
+	}
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+	if _, ok := tt.Find(keepAwakeLabel); !ok {
+		t.Fatalf("the header offers no way to hold the screen on: %v", tt.Texts())
+	}
+
+	if err := tt.Click(keepAwakeLabel); err != nil {
+		t.Fatal(err)
+	}
+	if len(asked) != 1 || !asked[0] {
+		t.Fatalf("the first press asked for %v, want the screen held on", asked)
+	}
+	if !p.KeepAwake {
+		t.Error("the panel does not show the hold it asked for")
+	}
+
+	if err := tt.Click(keepAwakeLabel); err != nil {
+		t.Fatal(err)
+	}
+	if len(asked) != 2 || asked[1] {
+		t.Fatalf("the second press asked for %v, want the machine let go", asked)
+	}
+	if p.KeepAwake {
+		t.Error("the panel still shows the hold after letting go")
+	}
+}
+
+// TestARefusedHoldLeavesTheButtonDark checks the one thing a mode button must
+// not do: stay lit over a screen that still turns itself off.
+func TestARefusedHoldLeavesTheButtonDark(t *testing.T) {
+	_, p := dashFixture(t)
+	p.OnKeepAwake = func(bool) error { return errors.New("锁定的会话") }
+
+	tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+	if err := tt.Click(keepAwakeLabel); err != nil {
+		t.Fatal(err)
+	}
+	if p.KeepAwake {
+		t.Error("the button lights up although the machine refused the hold")
+	}
+}
+
+// TestTheNarrowHeaderGivesUpTheHoldFirst checks a panel too narrow for every
+// action keeps the two that have no other way in — the refresh and the
+// settings — instead of pushing one of them off the window to make room.
+func TestTheNarrowHeaderGivesUpTheHoldFirst(t *testing.T) {
+	_, p := dashFixture(t)
+	p.SetSize(Fit(400, 400, 1))
+	tt := ui.NewTester(p.View, p.Size.Width, p.Size.Height)
+
+	if _, ok := tt.Find(keepAwakeLabel); ok {
+		t.Errorf("the header at %d wide still carries the hold", p.Size.Width)
+	}
+	gear, ok := tt.Find("打开设置")
+	if !ok {
+		t.Fatalf("the narrow header lost the settings: %v", tt.Texts())
+	}
+	if end := gear.X + gear.W; end > float32(p.Size.Width) {
+		t.Errorf("the gear ends at x=%v, outside the %d-wide window", end, p.Size.Width)
 	}
 }
 

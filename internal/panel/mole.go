@@ -84,7 +84,7 @@ func (a *App) molePage(c *ui.Context, d dash, in *app.Instance) {
 func (a *App) moleHeader(c *ui.Context, d dash) {
 	ui.Row(c).Shrink(0).Padding(8, dashGutter, 4, dashGutter).Gap(8).
 		AlignItems(ui.Center).Children(func() {
-		if dashIconButton(c, d, "返回", "返回", iconBack).Clicked() {
+		if dashIconButton(c, d, "返回", "返回", iconBack, false).Clicked() {
 			a.dashBack()
 		}
 		ui.Text(c, "Mole").FontSize(20).Bold().Grow(1).NoWrap()

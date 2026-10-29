@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"seeall/internal/app"
+	"seeall/internal/awake"
 	"seeall/internal/console"
 	"seeall/internal/core"
 	"seeall/internal/panel"
@@ -34,6 +35,10 @@ type state struct {
 	trayState tray.State
 	tooltip   string
 	quitting  bool
+	// keepAwake holds the screen on while the header's button is lit. The
+	// request belongs to one of its threads, so the keeper lives with the app
+	// rather than inside a page that is redrawn sixty times a second.
+	keepAwake *awake.Keeper
 }
 
 func main() {
@@ -76,10 +81,27 @@ func main() {
 			s.win.SetOpacity(v)
 		}
 	}
+	s.keepAwake = awake.New()
+	// The hold is not remembered between runs: a machine that stayed awake
+	// through last night's session should not stay awake tonight because of it.
+	s.panel.OnKeepAwake = func(on bool) error {
+		if err := s.keepAwake.Set(on); err != nil {
+			return err
+		}
+		// The panel drew the button before it was pressed; the next frame
+		// lights it (or puts it out).
+		if s.win != nil {
+			s.win.Invalidate()
+		}
+		return nil
+	}
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		s.quitting = true
 		s.host.Stop()
+		if s.keepAwake != nil {
+			s.keepAwake.Close()
+		}
 		if s.tray != nil {
 			s.tray.Destroy()
 		}

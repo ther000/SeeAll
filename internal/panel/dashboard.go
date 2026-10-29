@@ -69,6 +69,12 @@ const (
 // land on.
 const dashMoleButtonWidth = 440
 
+// dashAwakeButtonWidth is how wide the panel must be to carry the hold on the
+// screen, the action a small display loses first. The header's floor is the
+// two buttons every page needs, the refresh and the settings: 400×400 DIPs
+// gives the panel 238, where those two are the whole room there is.
+const dashAwakeButtonWidth = 300
+
 // dashMetricIDs are the readings the dashboard makes a card of first, in the
 // order it puts them: the machine's six parts, widest to narrowest. A reading
 // that is not here still gets a card, after these, unless it is one of the
@@ -263,17 +269,26 @@ func (a *App) dashHeader(c *ui.Context, d dash, snap core.Snapshot) {
 			if snap.Weather != nil && snap.Health > 0 {
 				dashScorePill(c, d, snap.Health, snap.HealthNote)
 			}
-			if dashIconButton(c, d, "刷新", "刷新全部（Ctrl+R）", iconRefresh).Clicked() {
+			if dashIconButton(c, d, "刷新", "刷新全部（Ctrl+R）", iconRefresh, false).Clicked() {
 				a.Host.Refresh()
+			}
+			// Holding the screen on is a mode rather than a click that opens
+			// something, so its button stays lit for as long as it is on. A
+			// panel too narrow for it keeps the two actions with no other way
+			// in rather than squeezing one of them off its edge.
+			if a.Size.Width >= dashAwakeButtonWidth {
+				if dashIconButton(c, d, keepAwakeLabel, keepAwakeNote(a.KeepAwake), iconAwake, a.KeepAwake).Clicked() {
+					a.toggleKeepAwake(c)
+				}
 			}
 			if a.Size.Width >= dashMoleButtonWidth {
 				if in := a.ownInstance(); in != nil {
-					if dashIconButton(c, d, "Mole", "Mole 清理", iconMole).Clicked() {
+					if dashIconButton(c, d, "Mole", "Mole 清理", iconMole, false).Clicked() {
 						a.SetSelected(in.ID)
 					}
 				}
 			}
-			if dashIconButton(c, d, "打开设置", "设置", iconGear).Clicked() {
+			if dashIconButton(c, d, "打开设置", "设置", iconGear, false).Clicked() {
 				a.SetSelected(SettingsPage)
 			}
 		})
@@ -398,7 +413,7 @@ func dashScore(c *ui.Context, d dash, snap core.Snapshot) {
 // machine, and what the page is.
 func (a *App) dashSettingsHeader(c *ui.Context, d dash) {
 	ui.Row(c).Shrink(0).Padding(8, dashGutter, 4, dashGutter).Gap(8).AlignItems(ui.Center).Children(func() {
-		if dashIconButton(c, d, "返回", "返回", iconBack).Clicked() {
+		if dashIconButton(c, d, "返回", "返回", iconBack, false).Clicked() {
 			a.dashBack()
 		}
 		ui.Text(c, "设置").FontSize(20).Bold().Grow(1).NoWrap()
@@ -423,18 +438,49 @@ func (a *App) dashBack() {
 }
 
 // dashIconButton is one of the header's actions: an icon with no box around
-// it, because the header is the box. It brightens as the pointer finds it.
-func dashIconButton(c *ui.Context, d dash, label, tooltip string, icon *ui.SVG) ui.Element {
+// it, because the header is the box. It brightens as the pointer finds it, and
+// an action that is on takes the accent instead, so a mode the panel is in
+// shows without a word.
+func dashIconButton(c *ui.Context, d dash, label, tooltip string, icon *ui.SVG, on bool) ui.Element {
 	button := ui.Button(c, "").Label(label).Description(tooltip).Tooltip(tooltip).
 		Padding(4, 6).Radius(10).Background(ui.Transparent).Border(0, ui.Transparent)
 	tint := d.muted
-	if button.Hovered() {
+	switch {
+	case on && button.Hovered():
+		tint = d.AccentHover
+	case on:
+		tint = d.Accent
+	case button.Hovered():
 		tint = d.Text
 	}
 	button.Children(func() {
 		ui.Icon(c, icon).FontSize(dashActionSize).TextColor(tint)
 	})
 	return button
+}
+
+// keepAwakeLabel names the header's hold on the screen: the label is what a
+// reader hears, and the note under it says what a click would do right now.
+const keepAwakeLabel = "保持屏幕常亮"
+
+// keepAwakeNote is what the button would do if it were pressed.
+func keepAwakeNote(on bool) string {
+	if on {
+		return "屏幕常亮、电脑不睡，点一下交还给系统"
+	}
+	return "让屏幕常亮、电脑不进入睡眠"
+}
+
+// toggleKeepAwake holds the screen on, or lets the power plan have it back.
+// A machine that refuses says so rather than leaving a lit button over a screen
+// that still turns itself off.
+func (a *App) toggleKeepAwake(c *ui.Context) {
+	on := !a.KeepAwake
+	if err := a.OnKeepAwake(on); err != nil {
+		c.Toast("改不了屏幕常亮：" + err.Error())
+		return
+	}
+	a.KeepAwake = on
 }
 
 // dashFactGap is the room between two pills, and dashFactPadX the room a pill

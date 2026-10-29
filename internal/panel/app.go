@@ -39,6 +39,13 @@ type App struct {
 	// opacityDirty is set while a drag has changed the value but not saved it.
 	opacityDirty bool
 
+	// KeepAwake is whether the panel is holding the screen on, and
+	// OnKeepAwake asks the machine for that. The app owns the request — a
+	// hold belongs to a thread, and this one is the app's, not the panel's —
+	// and the panel only keeps the state its button draws.
+	KeepAwake   bool
+	OnKeepAwake func(bool) error
+
 	// confirm is the Mole command waiting for its second click, and when it
 	// was asked for. The panel keeps it rather than the plugin because a
 	// confirmation is a thing the user is doing, not a thing Mole is.
@@ -55,6 +62,9 @@ func New(host *app.Host) *App {
 		Size:      Fit(1920, 1040, 1),
 		Opacity:   host.PanelOpacity(),
 		OnOpacity: func(float64) {},
+		// A panel made on its own has no machine to hold: the app puts the
+		// real request here.
+		OnKeepAwake: func(bool) error { return nil },
 	}
 }
 

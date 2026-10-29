@@ -18,6 +18,9 @@ const (
 	// moleSVG is Mole: a broom, because the page it opens is the one that
 	// sweeps. It is drawn in the header beside the gear.
 	moleSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15.6 2.8l-5.4 9.4"/><path d="M3.2 21.2c1.6-2.1 2.6-4 3.1-5.6.4-1.2 1.5-1.9 2.7-1.7l2.8.5c1.2.2 2 1.2 2.1 2.4.2 1.6.9 3.4 2.2 5.4z"/><path d="M6.7 19.6l-.6 2M9.5 20.1l-.4 2M12.3 20.6l-.3 2"/></svg>`
+	// awakeSVG is the screen held awake: a display with the sun over it. It
+	// is drawn in the header, and takes the accent while the hold is on.
+	awakeSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7.5" width="19" height="12" rx="2"/><path d="M9.5 22.5h5M12 19.5v3"/><path d="M12 2.2v2.6M6.2 3.6l1.4 2.2M17.8 3.6l-1.4 2.2"/></svg>`
 	// The dashboard's cards are named by what they measure rather than by a
 	// word, so each of the six parts of a machine has a mark of its own.
 	gpuSVG     = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="8.5" cy="12" r="2.3"/><circle cx="15.5" cy="12" r="2.3"/></svg>`
@@ -49,6 +52,7 @@ var (
 	iconPlus    = ui.MustParseSVG([]byte(plusSVG))
 	iconBack    = ui.MustParseSVG([]byte(backSVG))
 	iconMole    = ui.MustParseSVG([]byte(moleSVG))
+	iconAwake   = ui.MustParseSVG([]byte(awakeSVG))
 	iconGPU     = ui.MustParseSVG([]byte(gpuSVG))
 	iconMem     = ui.MustParseSVG([]byte(memSVG))
 	iconDisk    = ui.MustParseSVG([]byte(diskSVG))
