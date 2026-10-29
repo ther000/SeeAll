@@ -240,9 +240,21 @@ func TestTheGPUModelDoesNotPushOutItsTitle(t *testing.T) {
 	if !ok {
 		t.Fatalf("the card lost its title to its badge: %v", tt.Texts())
 	}
-	badge, ok := tt.Find("NVIDIA GeForce RTX 3060 Laptop GPU")
-	if !ok {
+	// The card has to name the card in less room than the whole model takes:
+	// the badge says what it could, and ends at a word where it could.
+	var badge ui.Rect
+	var model string
+	for _, s := range tt.Texts() {
+		if strings.HasPrefix(s, "NVIDIA") {
+			model = s
+			badge, ok = tt.Find(s)
+		}
+	}
+	if model == "" || !ok {
 		t.Fatalf("the card does not show the model: %v", tt.Texts())
+	}
+	if !strings.HasSuffix(model, "…") || strings.HasSuffix(model, " …") {
+		t.Errorf("the badge shows %q, want the model cut at a word", model)
 	}
 	// The badge gives way: it may take half a card, no more, and what is left
 	// is the title's.
@@ -262,6 +274,68 @@ func TestTheGPUModelDoesNotPushOutItsTitle(t *testing.T) {
 	if badge.X+badge.W > DesignWidth-dashGutter+0.5 {
 		t.Errorf("the model ends at x=%v, outside the card that ends at %v",
 			badge.X+badge.W, DesignWidth-dashGutter)
+	}
+}
+
+// TestTheFactsStayInsideTheirPills: a line of facts too wide for the panel is
+// capped to fit, and capping a pill has to shorten its words. A pill whose box
+// is capped while its text is drawn whole runs over the pill beside it — which
+// is what a 150% display, where the design's 660 pixels become 440 DIP, showed.
+func TestTheFactsStayInsideTheirPills(t *testing.T) {
+	h, p := dashFixture(t)
+	snap := h.Instance("system").Snapshot()
+	snap.Facts = []core.Fact{
+		{Value: "Ryzen 7 6800H"},
+		{Value: "13.7 GB"},
+		{Value: "Windows 11 26H2"},
+		{Label: "已运行", Value: "2天18小时"},
+	}
+	h.Inject("system", snap)
+	p.SetSize(Fit(2560, 1440, 1.5)) // 440×740: the design on a 150% display
+	tt := ui.NewTester(p.View, p.Size.Width, p.Size.Height)
+
+	// Two pills' words keep both paddings and the gap between the pills: a
+	// text wider than the box it was given eats into that room.
+	want := float32(2*dashFactPadX + dashFactGap)
+	end := float32(0)
+	for i, text := range []string{"Ryzen 7 6800H", "13.7 GB", "Windows 11 26H2", "已运行 2天18小时"} {
+		r, ok := tt.Find(text)
+		if !ok {
+			t.Fatalf("the header lost the pill %q: %v", text, tt.Texts())
+		}
+		if i > 0 {
+			if gap := r.X - end; gap < want-0.5 {
+				t.Errorf("%q starts %v after the words before it, want %v: its text is drawn over its pill",
+					text, gap, want)
+			}
+		}
+		end = r.X + r.W
+	}
+	if end > float32(p.Size.Width-dashGutter)+0.5 {
+		t.Errorf("the last pill's words end at x=%v, outside the header's room", end)
+	}
+}
+
+// TestALongBadgeEndsAtAWholeWord: a model longer than the badge has room for is
+// cut where a word ends, so the badge reads "RTX 3060…" rather than "RTX 3060
+// La…", and the words it keeps stay inside its own surface.
+func TestALongBadgeEndsAtAWholeWord(t *testing.T) {
+	h, p := dashFixture(t)
+	snap := h.Instance("system").Snapshot()
+	for i := range snap.Readings {
+		if snap.Readings[i].ID == "gpu" {
+			snap.Readings[i].Badge = "RTX 3060 Laptop"
+		}
+	}
+	h.Inject("system", snap)
+	p.SetSize(Fit(2560, 1440, 1.5))
+	tt := ui.NewTester(p.View, p.Size.Width, p.Size.Height)
+
+	if !tt.HasText("RTX 3060…") {
+		t.Errorf("a model too long for half a card was not ended at a word: %v", tt.Texts())
+	}
+	if tt.HasText("RTX 3060 Laptop") {
+		t.Errorf("the whole model is still drawn, over a badge it does not fit: %v", tt.Texts())
 	}
 }
 

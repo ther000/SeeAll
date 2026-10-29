@@ -243,10 +243,10 @@ func (a *App) dashHeader(c *ui.Context, d dash, snap core.Snapshot) {
 					if title == "" {
 						title = "SeeAll"
 					}
-					ui.Text(c, title).FontSize(20).Bold().NoWrap().MaxLines(1)
+					ui.Text(c, title).FontSize(20).Bold().MaxLines(1)
 					if snap.Subtitle != "" {
 						ui.Text(c, snap.Subtitle).FontSize(dashDetailSZ).TextColor(d.muted).
-							NoWrap().MaxLines(1)
+							MaxLines(1)
 					}
 				})
 			})
@@ -258,10 +258,14 @@ func (a *App) dashHeader(c *ui.Context, d dash, snap core.Snapshot) {
 			}
 		})
 		if len(snap.Facts) > 0 {
-			share := factShare(c, a.Size.Width, snap.Facts)
+			caps := factCaps(c, a.Size.Width, snap.Facts)
 			ui.Row(c).Shrink(0).Gap(dashFactGap).Children(func() {
-				for _, f := range snap.Facts {
-					dashFact(c, d, f.Text(), share)
+				for i, f := range snap.Facts {
+					var cap float32
+					if i < len(caps) {
+						cap = caps[i]
+					}
+					dashFact(c, d, f.Text(), cap)
 				}
 			})
 		}
@@ -313,41 +317,79 @@ func dashIconButton(c *ui.Context, d dash, label, tooltip string, icon *ui.SVG) 
 
 // dashFactGap is the room between two pills, and dashFactPadX the room a pill
 // keeps to the left and right of its text.
+//
+// The padding is the width at which the four facts a machine usually shows —
+// the processor, its memory, the system and the uptime — fit a 440 DIP panel,
+// which is what a 150% display gives the design: reading "已运行 2天18小时" cut
+// to "已运行 2天18小…" would be the pill line paying for 2 DIP of padding it
+// never needed.
 const (
 	dashFactGap  = 6
-	dashFactPadX = 9
+	dashFactPadX = 7
 )
 
-// factShare is how wide a pill may be. A line of facts that fits keeps the
-// width its words ask for; one that does not gives all of them equal shares,
-// so that the line stays a line on a panel narrower than the design, and the
-// longest fact is cut rather than pushed out of the window.
-func factShare(c *ui.Context, width int, facts []core.Fact) float32 {
+// factCaps is how wide each pill may be, in the order of the facts. A line
+// with room for its words gets no caps: every pill keeps the width its words
+// ask for. One without gets the room the short pills leave over, so that the
+// words that have to be cut are the longest ones, and are cut as little as the
+// line allows.
+func factCaps(c *ui.Context, width int, facts []core.Fact) []float32 {
 	if len(facts) < 2 {
-		return 0
+		return nil
 	}
 	room := float32(width-2*dashGutter) - float32(len(facts)-1)*dashFactGap
+	need := make([]float32, len(facts))
 	total := float32(0)
-	for _, f := range facts {
+	for i, f := range facts {
 		w, _ := c.MeasureText(0, ui.Span{Text: f.Text(), Size: 12.5})
-		total += w + 2*dashFactPadX
+		need[i] = w + 2*dashFactPadX
+		total += need[i]
 	}
 	if total <= room {
-		return 0
+		return nil
 	}
-	return room / float32(len(facts))
+	caps := make([]float32, len(facts))
+	fixed := make([]bool, len(facts))
+	for left, count := room, len(facts); count > 0; {
+		share := left / float32(count)
+		grew := false
+		for i := range need {
+			if !fixed[i] && need[i] <= share {
+				fixed[i], grew = true, true
+				left -= need[i]
+				count--
+			}
+		}
+		if grew {
+			continue
+		}
+		for i := range need {
+			if !fixed[i] {
+				caps[i] = share
+			}
+		}
+		break
+	}
+	return caps
 }
 
 // dashFact is one pill: a fact about the machine, not a measurement of it, so
-// it is set smaller and quieter than the cards under it. A share of zero means
+// it is set smaller and quieter than the cards under it. A cap of zero means
 // the line has room for its words.
-func dashFact(c *ui.Context, d dash, text string, share float32) ui.Element {
+func dashFact(c *ui.Context, d dash, text string, cap float32) ui.Element {
 	pill := ui.Row(c).Shrink(1).Padding(4, dashFactPadX).Radius(12).Background(d.pill)
-	if share > 0 {
-		pill.MaxWidth(share)
+	if cap > 0 {
+		pill.MaxWidth(cap)
 	}
 	pill.Children(func() {
-		ui.Text(c, text).FontSize(12.5).TextColor(d.pillText).NoWrap().MaxLines(1)
+		// The words are what gives way: a box narrower than its text would
+		// draw the rest over the pill beside it. MaxLines ends the cut with
+		// an ellipsis, and NoWrap has to stay off — text that may not wrap is
+		// text the shaper never cuts.
+		label := ui.Text(c, text).FontSize(12.5).TextColor(d.pillText).MaxLines(1)
+		if cap > 2*dashFactPadX {
+			label.MaxWidth(cap - 2*dashFactPadX)
+		}
 	})
 	return pill
 }
@@ -440,7 +482,7 @@ func (a *App) dashCard(c *ui.Context, d dash, in *app.Instance, snap core.Snapsh
 		ui.Row(c).Shrink(0).Gap(6).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, dashIcon(r.ID)).FontSize(13).TextColor(color)
 			ui.Text(c, r.Label).FontSize(dashLabelSize).TextColor(d.muted).
-				NoWrap().MaxLines(1).Grow(1)
+				MaxLines(1).Grow(1)
 			if r.Badge != "" {
 				dashBadge(c, d, r.Badge, width)
 			}
@@ -449,7 +491,7 @@ func (a *App) dashCard(c *ui.Context, d dash, in *app.Instance, snap core.Snapsh
 		dashChart(c, d, in, r, color)
 		if detail := dashDetail(snap, r); detail != "" {
 			ui.Text(c, detail).FontSize(dashDetailSZ).TextColor(d.muted).
-				NoWrap().MaxLines(1)
+				MaxLines(1)
 		}
 	})
 }
@@ -472,7 +514,7 @@ func (a *App) dashDeviceCard(c *ui.Context, d dash, in *app.Instance, width floa
 		ui.Row(c).Shrink(0).Gap(6).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, iconFor(in.Manifest().Icon)).FontSize(13).TextColor(color)
 			ui.Text(c, in.Name).FontSize(dashLabelSize).TextColor(d.muted).
-				NoWrap().MaxLines(1).Grow(1)
+				MaxLines(1).Grow(1)
 			if badge := dashDeviceBadge(snap); badge != "" {
 				dashBadge(c, d, badge, width)
 			}
@@ -481,7 +523,7 @@ func (a *App) dashDeviceCard(c *ui.Context, d dash, in *app.Instance, width floa
 		dashChart(c, d, in, primary, color)
 		if detail := dashDeviceDetail(snap, primary, reported); detail != "" {
 			ui.Text(c, detail).FontSize(dashDetailSZ).TextColor(d.muted).
-				NoWrap().MaxLines(1)
+				MaxLines(1)
 		}
 	})
 }
@@ -549,27 +591,68 @@ func dashBig(c *ui.Context, d dash, value, unit string) {
 // state in two words. It gives way before the title does: a card whose label
 // had been pushed out by its badge would not say what it measures.
 func dashBadge(c *ui.Context, d dash, text string, cardWidth float32) ui.Element {
+	// The badge's own padding, which is what its words have less of.
+	const padX, padY = 7, 1
 	max := float32(0)
 	if cardWidth > 0 {
 		if room := cardWidth*0.5 - dashCardPad; room > 0 {
 			max = room
 		}
 	}
-	badge := ui.Row(c).Shrink(0).Padding(1, 7).Radius(8).Background(d.badge)
+	badge := ui.Row(c).Shrink(0).Padding(padY, padX).Radius(8).Background(d.badge)
+	shown := text
 	if max > 0 {
 		badge.MaxWidth(max)
+		shown = fitBadge(c, text, max-2*padX)
 	}
 	badge.Children(func() {
-		label := ui.Text(c, text).FontSize(dashBadgeSize).TextColor(d.badgeText).
-			NoWrap().MaxLines(1)
-		// The pill's own box is only as wide as its text, so the text is what
-		// has to be cut: a box that kept its natural width would draw the
-		// model over the card's edge.
-		if max > 14 {
-			label.MaxWidth(max - 14)
+		// The badge's own box is only as wide as its text, so the text is what
+		// has to give way: a box that kept its natural width would draw the
+		// model over the card's edge. MaxLines ends the cut with an ellipsis,
+		// and NoWrap has to stay off — text that may not wrap is text the
+		// shaper never cuts, however narrow its box.
+		label := ui.Text(c, shown).FontSize(dashBadgeSize).TextColor(d.badgeText).
+			MaxLines(1)
+		if max > 2*padX {
+			label.MaxWidth(max - 2*padX)
+		}
+		if shown != text {
+			// The badge says less than the card knows; what a reader cannot
+			// see, assistive technology still gets whole.
+			label.Description(text)
 		}
 	})
 	return badge
+}
+
+// fitBadge shortens a badge to fit max, dropping whole words where it can, so
+// that a model reads "RTX 3060…" rather than "RTX 3060 La…". Text that does not
+// break at spaces — a Chinese state, a volume label — is left whole for the
+// shaper to end with its own ellipsis.
+func fitBadge(c *ui.Context, text string, max float32) string {
+	if max <= 0 {
+		return text
+	}
+	fits := func(s string) bool {
+		w, _ := c.MeasureText(0, ui.Span{Text: s, Size: dashBadgeSize})
+		return w <= max
+	}
+	if fits(text) {
+		return text
+	}
+	for _, r := range text {
+		if r > 0x7F {
+			return text
+		}
+	}
+	words := strings.Fields(text)
+	for len(words) > 1 {
+		words = words[:len(words)-1]
+		if candidate := strings.Join(words, " ") + "…"; fits(candidate) {
+			return candidate
+		}
+	}
+	return text
 }
 
 // dashProcesses names the programs behind the numbers, heaviest first. It is
@@ -601,7 +684,7 @@ func (a *App) dashProcesses(c *ui.Context, d dash, procs []core.Process) {
 	ui.Column(c).Shrink(0).Padding(dashProcPad, dashGutter).Radius(dashCardR).
 		Background(d.card).Gap(4).Children(func() {
 		ui.Row(c).Shrink(0).Gap(colGap).Children(func() {
-			title := ui.Text(c, "高占用进程").FontSize(13).TextColor(d.muted).NoWrap().MaxLines(1).Grow(1)
+			title := ui.Text(c, "高占用进程").FontSize(13).TextColor(d.muted).MaxLines(1).Grow(1)
 			if nameW > 0 {
 				title.MaxWidth(nameW)
 			}
@@ -613,7 +696,7 @@ func (a *App) dashProcesses(c *ui.Context, d dash, procs []core.Process) {
 		for _, p := range procs {
 			ui.Row(c).Shrink(0).Height(dashProcRowH).Gap(colGap).AlignItems(ui.Center).Children(func() {
 				name := ui.Text(c, p.Name).FontSize(dashProcSize).TextColor(d.Text).
-					NoWrap().MaxLines(1).Grow(1)
+					MaxLines(1).Grow(1)
 				if nameW > 0 {
 					name.MaxWidth(nameW)
 				}
