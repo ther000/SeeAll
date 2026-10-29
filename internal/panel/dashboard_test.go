@@ -355,9 +355,9 @@ func TestTheWeatherLeadsTheHeader(t *testing.T) {
 	if !ok {
 		t.Fatalf("the header does not say the temperature: %v", tt.Texts())
 	}
-	word, ok := tt.Find("多云")
+	word, ok := tt.Find("多云 · 重庆")
 	if !ok {
-		t.Fatalf("the header does not say what the sky is doing: %v", tt.Texts())
+		t.Fatalf("the header does not say the sky and the city: %v", tt.Texts())
 	}
 	if word.X < temp.X+temp.W {
 		t.Errorf("the sky's word at x=%v is not beside the temperature at x=%v..%v",
@@ -383,6 +383,37 @@ func TestTheWeatherLeadsTheHeader(t *testing.T) {
 	for _, s := range tt.Texts() {
 		if s == "90" {
 			t.Errorf("the header still draws the score as its own number: %v", tt.Texts())
+		}
+	}
+}
+
+// TestTheSkySaysItsCity checks the phrase beside the temperature: the sky and
+// the city it is over, joined when both are known and one of them alone when
+// the service could not say the other — rather than a stray separator or an
+// empty gap where a word should be.
+func TestTheSkySaysItsCity(t *testing.T) {
+	for _, c := range []struct {
+		text, place, want string
+	}{
+		{"多云", "重庆", "多云 · 重庆"},
+		{"多云", "", "多云"},
+		{"", "重庆", "重庆"},
+	} {
+		h, p := dashFixture(t)
+		snap := h.Instance("system").Snapshot()
+		snap.Weather = &core.Weather{
+			TempC: 18, Text: c.text, Kind: "partly", Place: c.place, At: time.Now(),
+		}
+		h.Inject("system", snap)
+		tt := ui.NewTester(p.View, DesignWidth, DesignHeight)
+
+		if !tt.HasText(c.want) {
+			t.Errorf("sky %q over %q reads %v, want %q", c.text, c.place, tt.Texts(), c.want)
+		}
+		// The temperature is what the phrase hangs off, whatever the services
+		// managed to say.
+		if !tt.HasText("18°") {
+			t.Errorf("sky %q over %q left the header without a temperature", c.text, c.place)
 		}
 	}
 }

@@ -269,25 +269,40 @@ func (a *App) dashHeader(c *ui.Context, d dash, snap core.Snapshot) {
 }
 
 // dashWeather leads the header with the sky: the shape it has, the temperature
-// in the score's own size, and the sky in a word. It is the same three things
-// the score says — a mark, a number and a word — about the place the machine is
-// in rather than about the machine.
+// in the score's own size, and then the sky and the city it is over in a word.
+// It is the same three things the score says — a mark, a number and a word —
+// about the place the machine is in rather than about the machine.
 func dashWeather(c *ui.Context, d dash, w core.Weather) {
 	ui.Icon(c, weatherIcon(w.Kind)).FontSize(20).TextColor(dashSkyColor(d, w.Kind))
 	ui.Text(c, fmt.Sprintf("%.0f°", w.TempC)).FontSize(dashScoreSize).Bold().
 		TextColor(d.Text).NoWrap().Tooltip(weatherTooltip(w))
+
+	// The sky and the place are one phrase — "多云 · 重庆" — so they are one
+	// text: the sky in the second rank of color, the city in the third, which
+	// is the order they matter in.
+	spans := make([]ui.Span, 0, 3)
 	if w.Text != "" {
-		ui.Text(c, w.Text).FontSize(dashNoteSize).TextColor(d.secondary).NoWrap()
+		spans = append(spans, ui.Span{Text: w.Text, Size: dashNoteSize, Color: d.secondary})
 	}
+	if w.Place != "" {
+		if len(spans) > 0 {
+			spans = append(spans, ui.Span{Text: " · ", Size: dashNoteSize, Color: d.muted})
+		}
+		spans = append(spans, ui.Span{Text: w.Place, Size: dashNoteSize, Color: d.muted})
+	}
+	if len(spans) == 0 {
+		return
+	}
+	ui.RichText(c, spans...).MaxLines(1)
 }
 
-// weatherTooltip says where the temperature is for and when it was taken: two
-// things the header has no room for and a reader may still want.
+// weatherTooltip says when the temperature was taken, which is the one thing
+// about it the header has no room for.
 func weatherTooltip(w core.Weather) string {
-	if w.Place == "" || w.At.IsZero() {
-		return w.Place
+	if w.At.IsZero() {
+		return ""
 	}
-	return fmt.Sprintf("%s · %s 更新", w.Place, w.At.Format("15:04"))
+	return fmt.Sprintf("天气 %s 更新", w.At.Format("15:04"))
 }
 
 // dashSkyColor colors the sky's shape by what it shows: the sun is the
