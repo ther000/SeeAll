@@ -230,3 +230,7 @@ $env:SEEALL_MO_LIVE=1; go test ./internal/molecli ./internal/plugins/mole -run L
 - **Mole 页的「卸载 App」「清项目」只在终端**：那两个命令要交互选择列表，面板给不了键盘。
 - **清理是真删**：`mo clean` 不经过回收站（卸载 App 的残留才会进回收站），所以面板坚持预览 + 二次确认，
   并且不提供「一键清所有」这种按钮。真要撤销，只能靠 Mole 自己的白名单在动手前拦下来。
+
+## 许可
+
+[MIT](LICENSE) © 2026 SeeAll
