@@ -1,7 +1,7 @@
 {
   "name": "SeeAll",
   "identifier": "dev.seeall.app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "SeeAll",
   "copyright": "© 2026 SeeAll",
   "out": "build",

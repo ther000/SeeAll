@@ -37,7 +37,7 @@ go build -o seeall.exe .  # 快速编译（带控制台，会自动隐藏）
 | --- | --- |
 | `SeeAll.exe`（仓库根目录） | 双击即用，免安装 |
 | `build/windows-amd64/SeeAll.exe` | 同上，打包目录里的原件 |
-| `build/windows-amd64/SeeAll Setup 1.0.0 amd64.exe` | 安装包：开始菜单、卸载项、开机自启 |
+| `build/windows-amd64/SeeAll Setup 1.0.1 amd64.exe` | 安装包：开始菜单、卸载项、开机自启 |
 
 > **关于终端窗口**：`go build` 默认产出控制台程序，双击会带一个黑窗口。
 > SeeAll 启动时会把**只属于自己的**那个控制台藏起来（`internal/console`）；
